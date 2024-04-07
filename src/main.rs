@@ -75,7 +75,11 @@ async fn server(secret_key: Key, database: Pool) -> Result<(), String> {
                     .route("/favicon.ico", web::get().to(webui::images::favicon))
                     .route("/logo.png", web::get().to(webui::images::logo)),
             )
-            .service(web::scope(&utils::make_url("/ui")).service(webui::root))
+            .service(
+                web::scope(&utils::make_url("/ui"))
+                    .service(webui::root)
+                    .service(webui::register_page),
+            )
             .service(
                 web::scope(&utils::make_url("/api"))
                     .service(api::info)
@@ -95,37 +99,42 @@ async fn server(secret_key: Key, database: Pool) -> Result<(), String> {
 
     // Setting TLS
     let server = {
+        let binding = format!("{}:{}", config!(server.host), config!(server.port));
         #[cfg(feature = "openssl")]
         {
+            log::info!("Binding to {binding} with TLS (openssl)");
             server
-                .bind_openssl(
-                    format!("{}:{}", config!(server.host), config!(server.port)),
-                    tls::get_openssl_config(config!(tls))?,
-                )
+                .bind_openssl(binding, tls::get_openssl_config(config!(tls))?)
                 .map_err(|e| format!("Failed to bind server with TLS (openssl): {e}"))?
         }
 
         #[cfg(feature = "rustls")]
         {
+            log::info!("Binding to {binding} with TLS (rustls)");
             server
-                .bind_rustls_0_22(
-                    format!("{}:{}", config!(server.host), config!(server.port)),
-                    tls::get_rustls_config(config!(tls))?,
-                )
+                .bind_rustls_0_22(binding, tls::get_rustls_config(config!(tls))?)
                 .map_err(|e| format!("Failed to bind server with TLS (rustls): {e}"))?
         }
 
         #[cfg(feature = "no-tls")]
         {
+            log::info!("Binding to {binding}");
+            log::warn!("TLS is disabled.");
+            log::warn!("This is recommended *ONLY* if you are running this server behind a reverse proxy (with TLS) or if you are running the server locally.");
+            log::warn!("Any other configuration is *UNSAFE* and may be subject to cyberattacks.");
             server
-                .bind(format!("{}:{}", config!(server.host), config!(server.port)))
+                .bind(binding)
                 .map_err(|e| format!("Failed to bind server: {e}"))?
         }
     };
 
     plugins::init();
 
-    log::info!("Starting server...");
+    log::info!(
+        "Starting server with {} workers on version {}...",
+        config!(server.workers),
+        env!("CARGO_PKG_VERSION"),
+    );
     server
         .workers(*config!(server.workers))
         .run()
@@ -167,23 +176,21 @@ async fn main() {
         match fs::read(path).await {
             Ok(b) => Zeroizing::new(b),
             Err(e) => {
-                eprintln!("Failed to read secret key file `{path}`: {e}");
+                log::error!("Failed to read secret key file `{path}`: {e}");
                 return;
             }
         }
     };
     if secret_key.len() < 64 {
-        eprintln!("Session secret key must be 64 bytes long");
+        log::error!("Session secret key must be 64 bytes long");
         return;
     }
     let secret_key = Key::from(&secret_key[..64]);
 
-    let database = match auth::database::init_db().await {
-        Ok(pool) => pool,
-        Err(e) => {
-            eprintln!("Failed to initialize Database: {e}");
-            return;
-        }
+    let database = if let Some(database) = auth::init_db().await {
+        database
+    } else {
+        return;
     };
 
     if let Err(e) = server(secret_key, database).await {

@@ -6,7 +6,9 @@ use async_sqlite::{
 };
 use rand::{distributions::Alphanumeric, Rng};
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+
+use super::utils::{calc_expire, now};
 
 /// Types
 
@@ -71,9 +73,9 @@ const INSERT_TOKEN: &str = "INSERT INTO tokens (token, expire_date) VALUES (:tok
 
 fn get_tables() -> String {
     if let Some(_) = config!(registration) {
-        format!("BEGIN;\n{}\n{}\nCOMMIT;", USERS_TABLE, TOKEN_TABLE)
+        format!("BEGIN;\n{USERS_TABLE}\n{TOKEN_TABLE}\nCOMMIT;")
     } else {
-        format!("BEGIN;\n{}\nCOMMIT;", USERS_TABLE)
+        format!("BEGIN;\n{USERS_TABLE}\nCOMMIT;")
     }
 }
 
@@ -92,7 +94,7 @@ pub async fn init_db() -> Result<Pool, DBError> {
         .map_err(|e| DBError::IOError(e.to_string()))?;
     pool.conn(|conn| conn.execute_batch(&get_tables()))
         .await
-        .map_err(|e| DBError::ExecError(format!("Failed to initialize tables: {}", e)))?;
+        .map_err(|e| DBError::ExecError(format!("Failed to initialize tables: {e}")))?;
     Ok(pool)
 }
 
@@ -201,14 +203,7 @@ pub async fn create_token(pool: &Pool, duration_secs: Option<u64>) -> Result<Str
         } else {
             registration.token_duration_seconds
         };
-        let expire_date: u64 = SystemTime::now()
-            .checked_add(Duration::new(duration, 0))
-            .ok_or(DBError::TimeFailure(
-                "Failed to calculate token's expire date".into(),
-            ))?
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| DBError::TimeFailure("System clock may have gone backwards".into()))?
-            .as_secs();
+        let expire_date: u64 = calc_expire(Duration::new(duration, 0))?;
         pool.conn(move |conn| {
             conn.execute(
                 INSERT_TOKEN,
@@ -240,7 +235,7 @@ pub async fn get_token(pool: &Pool, token: String) -> Result<Option<Token>, DBEr
             .optional()
         })
         .await
-        .map_err(|e| DBError::ExecError(format!("Failed to get token: {}", e)))?)
+        .map_err(|e| DBError::ExecError(format!("Failed to get token: {e}")))?)
 }
 
 /// Gets all saved tokens
@@ -258,17 +253,22 @@ pub async fn get_all_tokens(pool: &Pool) -> Result<Vec<Token>, DBError> {
             rows.collect()
         })
         .await
-        .map_err(|e| DBError::ExecError(format!("Failed to get tokens: {}", e)))?)
+        .map_err(|e| DBError::ExecError(format!("Failed to get tokens: {e}")))?)
+}
+
+/// Removes a token
+pub async fn delete_token(pool: &Pool, token: String) -> Result<(), DBError> {
+    pool.conn(move |conn| conn.execute("DELETE FROM tokens WHERE token = ?1", [token]))
+        .await
+        .map_err(|e| DBError::ExecError(format!("Failed to remove token: {e}")))?;
+    Ok(())
 }
 
 /// Removes all expired tokens
 pub async fn remove_expired_tokens(pool: &Pool) -> Result<(), DBError> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| DBError::TimeFailure("System clock may have gone backwards".into()))?
-        .as_secs();
+    let now = now()?;
     pool.conn(move |conn| conn.execute("DELETE FROM tokens WHERE expire_date < ?1", [now]))
         .await
-        .map_err(|e| DBError::ExecError(format!("Failed to remove expired tokens: {}", e)))?;
+        .map_err(|e| DBError::ExecError(format!("Failed to remove expired tokens: {e}")))?;
     Ok(())
 }

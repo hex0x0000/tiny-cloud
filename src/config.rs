@@ -26,7 +26,6 @@ pub struct Tls {
 pub struct Registration {
     pub token_duration_seconds: u64,
     pub token_size: u8,
-    pub max_accounts: usize,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -48,7 +47,6 @@ pub struct Config {
     #[cfg(not(feature = "no-tls"))]
     pub tls: Tls,
     pub registration: Option<Registration>,
-    pub max_account_storage_bytes: usize,
     pub data_directory: String,
     pub cookie_duration_minutes: u32,
     pub login_deadline_minutes: Option<u64>,
@@ -105,9 +103,7 @@ impl Config {
             registration: Some(Registration {
                 token_size: 16,
                 token_duration_seconds: 24 * 60 * 60,
-                max_accounts: 50,
             }),
-            max_account_storage_bytes: 10485750,
             data_directory: format!("{}/data", get_exec_dir()?),
             cookie_duration_minutes: 43200,
             login_deadline_minutes: Some(43200),

@@ -1,5 +1,6 @@
 use crate::{
     auth::{self, error::AuthError},
+    config,
     utils::get_ip,
 };
 use actix_identity::error::GetIdentityError;
@@ -25,19 +26,56 @@ pub struct Register {
 }
 
 /// Registers new user and starts a new session
-/*
 #[post("/register")]
-pub async fn register(req: HttpRequest, credentials: web::Json<Register>) -> impl Responder {
-    if let Some(registration) = config!(registration) {
+pub async fn register(
+    req: HttpRequest,
+    conn: ConnectionInfo,
+    credentials: web::Json<Register>,
+    pool: web::Data<Pool>,
+) -> impl Responder {
+    if let Some(_) = config!(registration) {
         let credentials = credentials.into_inner();
-        if registration.token {
-        } else {
+        let password = Zeroizing::new(credentials.password.into_bytes());
+        let pool = pool.into_inner();
+        match auth::register_user(
+            &pool,
+            credentials.user.clone(),
+            &password,
+            credentials.token,
+        )
+        .await
+        {
+            Ok(_) => {
+                if let Err(err) = Identity::login(&req.extensions(), credentials.user.clone()) {
+                    log::error!("Failed to build Identity: {err}");
+                    AuthError::InternalError("Failed to build identity during registration".into())
+                        .to_response()
+                } else {
+                    log::warn!(
+                        "host [{}] registered in as `{}`",
+                        get_ip(&conn),
+                        &credentials.user
+                    );
+                    HttpResponse::Ok().body("")
+                }
+            }
+            Err(err) => {
+                if let AuthError::InvalidRegCredentials = err {
+                    log::warn!(
+                        "host [{}] tried to register as `{}`",
+                        get_ip(&conn),
+                        // Getting only needed chars to avoid malicious payloads,
+                        // due to the fact that here the username is unchecked
+                        &credentials.user[..(*config!(max_username_size) as usize)]
+                    );
+                }
+                err.to_response()
+            }
         }
-        HttpResponse::Ok()
     } else {
-        HttpResponse::NotFound()
+        HttpResponse::NotFound().body("")
     }
-}*/
+}
 
 /// Logins and starts a new session
 #[post("/login")]
@@ -66,7 +104,7 @@ pub async fn login(
                 log::warn!(
                     "host [{}] tried to login as `{}`",
                     get_ip(&conn),
-                    login.user
+                    &login.user[..(*config!(max_username_size) as usize)]
                 );
             }
             err.to_response()

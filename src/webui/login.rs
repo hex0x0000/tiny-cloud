@@ -1,5 +1,15 @@
-use crate::{config, web_file, utils};
+use crate::{config, utils, web_file};
 use maud::{html, Markup, PreEscaped, DOCTYPE};
+
+fn registration_link() -> Markup {
+    if let Some(_) = config!(registration) {
+        html! {
+            a href=(utils::make_url("/ui/register")) { "Register Here" }
+        }
+    } else {
+        html!()
+    }
+}
 
 pub fn page() -> Markup {
     html! {
@@ -16,17 +26,18 @@ pub fn page() -> Markup {
                 style { (web_file!("global.css")) (web_file!("login.css")) }
             }
             body {
-               p { div id="title" { (config!(server_name)) } }
-               p { div id="version" { (env!("CARGO_PKG_VERSION")) } }
-               p { div id="description" { (config!(description)) } }
-               form id="login" name="login" {
-                    br { label for="user" { "Username:" } }
-                    br { input type="text" id="user" name="user"; }
-                    br { label for="password" { "Password:" } }
-                    br { input type="password" id="password" name="password"; }
+                p; div id="title" { (config!(server_name)) }
+                p; div id="version" { (env!("CARGO_PKG_VERSION")) }
+                p; div id="description" { (config!(description)) }
+                form id="login" name="login" {
+                    br; label for="user" { "Username:" }
+                    br; input type="text" id="user" name="user";
+                    br; label for="password" { "Password:" }
+                    br; input type="password" id="password" name="password";
                     input value="Login" type="submit";
-               }
-               div id="errormsg";
+                }
+                div id="errormsg";
+                (registration_link())
             }
         }
     }

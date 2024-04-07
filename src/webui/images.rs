@@ -12,8 +12,5 @@ pub async fn favicon() -> HttpResponse {
 }
 
 pub async fn logo() -> HttpResponse {
-    HttpResponse::Ok()
-        .content_type("image/png")
-        .body(LOGO)
+    HttpResponse::Ok().content_type("image/png").body(LOGO)
 }
-

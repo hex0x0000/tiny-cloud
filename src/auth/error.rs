@@ -1,5 +1,6 @@
 use actix_web::{http::StatusCode, HttpResponse};
 use serde_json::json;
+use std::convert::Into;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -25,7 +26,18 @@ pub enum AuthError {
     #[error("Invalid credentials")]
     InvalidCredentials,
     #[error("Invalid registration credentials")]
-    InvalidRegCredentials(String),
+    InvalidRegCredentials,
+    #[error("Token does not exist")]
+    BadToken,
+}
+
+impl Into<AuthError> for DBError {
+    fn into(self) -> AuthError {
+        match self {
+            Self::UserExists => AuthError::InvalidRegCredentials,
+            _ => AuthError::InternalError(self.to_string()),
+        }
+    }
 }
 
 impl AuthError {
@@ -33,10 +45,21 @@ impl AuthError {
         match self {
             Self::BadCredentials(_) => "BadCredentials",
             Self::InvalidCredentials => "InvalidCredentials",
-            Self::InvalidRegCredentials(_) => "InvalidRegCredentials",
+            Self::InvalidRegCredentials => "InvalidRegCredentials",
             Self::InternalError(_) => "InternalError",
+            Self::BadToken => "BadToken",
         }
         .into()
+    }
+
+    pub fn http_code(&self) -> u16 {
+        match self {
+            Self::BadCredentials(_) => 400,
+            Self::InvalidCredentials => 401,
+            Self::InvalidRegCredentials => 401,
+            Self::BadToken => 401,
+            Self::InternalError(_) => 500,
+        }
     }
 
     pub fn to_response(&self) -> HttpResponse {
@@ -54,14 +77,5 @@ impl AuthError {
             })
             .to_string(),
         )
-    }
-
-    pub fn http_code(&self) -> u16 {
-        match self {
-            Self::BadCredentials(_) => 400,
-            Self::InvalidCredentials => 401,
-            Self::InvalidRegCredentials(_) => 401,
-            Self::InternalError(_) => 500,
-        }
     }
 }

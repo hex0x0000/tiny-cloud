@@ -1,10 +1,14 @@
 pub mod cli;
-pub mod database;
+mod database;
 pub mod error;
 mod hash;
+mod utils;
+
 use crate::config;
 use async_sqlite::Pool;
 use error::{AuthError, DBError};
+
+use self::utils::now;
 
 fn check_validity(username: &String, password: &Vec<u8>) -> Result<(), AuthError> {
     let user_len = username.len();
@@ -33,12 +37,45 @@ fn check_validity(username: &String, password: &Vec<u8>) -> Result<(), AuthError
     Ok(())
 }
 
+async fn check_token(pool: &Pool, token: String) -> Result<(), AuthError> {
+    let db_token = database::get_token(pool, token.clone())
+        .await
+        .map_err(|e| AuthError::InternalError(e.to_string()))?
+        .ok_or(AuthError::BadToken)?;
+    if db_token.token == token {
+        // Will panic in 292 billion years, be ready for that year!
+        let now = now().map_err(|e| e.into())? as i64;
+        if db_token.expire_date < now {
+            database::remove_expired_tokens(pool)
+                .await
+                .map_err(|e| e.into())?;
+            return Err(AuthError::BadToken);
+        }
+    } else {
+        return Err(AuthError::BadToken);
+    }
+    database::delete_token(pool, token)
+        .await
+        .map_err(|e| e.into())?;
+    Ok(())
+}
+
+pub async fn init_db() -> Option<Pool> {
+    match database::init_db().await {
+        Ok(pool) => Some(pool),
+        Err(e) => {
+            log::error!("Failed to init auth database: {e}");
+            None
+        }
+    }
+}
+
 /// Checks a user's password
 pub async fn check(pool: &Pool, username: &String, password: &Vec<u8>) -> Result<(), AuthError> {
     check_validity(username, password)?;
     let hash = database::get_user(pool, username.clone())
         .await
-        .map_err(|e| AuthError::InternalError(e.to_string()))?
+        .map_err(|e| e.into())?
         .ok_or(AuthError::InvalidCredentials)?
         .pass_hash;
     hash::verify(password, &hash)
@@ -53,19 +90,32 @@ pub async fn add_user(
 ) -> Result<(), AuthError> {
     check_validity(&username, password)?;
     let passwd_hash = hash::create(password)?;
-    if let Err(err) = database::add_user(pool, username, passwd_hash, is_admin).await {
-        match err {
-            DBError::UserExists => Err(AuthError::InvalidRegCredentials(err.to_string())),
-            _ => Err(AuthError::InternalError(err.to_string())),
-        }
-    } else {
-        Ok(())
-    }
+    database::add_user(pool, username, passwd_hash, is_admin)
+        .await
+        .map_err(|e| e.into())?;
+    Ok(())
+}
+
+/// Registers a new user with a token.
+/// Fails if username already exists or if token is not valid
+pub async fn register_user(
+    pool: &Pool,
+    username: String,
+    password: &Vec<u8>,
+    token: String,
+) -> Result<(), AuthError> {
+    check_validity(&username, password)?;
+    check_token(pool, token).await?;
+    let passwd_hash = hash::create(password)?;
+    database::add_user(pool, username, passwd_hash, false)
+        .await
+        .map_err(|e| e.into())?;
+    Ok(())
 }
 
 pub async fn delete_user(pool: &Pool, username: String) -> Result<(), AuthError> {
     database::delete_user(&pool, username)
         .await
-        .map_err(|e| AuthError::InternalError(e.to_string()))?;
+        .map_err(|e| e.into())?;
     Ok(())
 }

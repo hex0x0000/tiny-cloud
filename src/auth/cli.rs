@@ -46,7 +46,7 @@ pub async fn create_user() -> Result<(), String> {
     add_user(&pool, user.clone(), &password, is_admin)
         .await
         .map_err(|e| match e {
-            AuthError::InvalidRegCredentials(ref err) => format!("{e}: {err}"),
+            AuthError::InvalidRegCredentials => format!("{e}"),
             AuthError::InternalError(ref err) => format!("{e}: {err}"),
             _ => e.to_string(),
         })?;
