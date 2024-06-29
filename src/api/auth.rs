@@ -1,7 +1,8 @@
+use crate::error::ErrToResponse;
 use crate::{
     auth::{self, error::AuthError},
     config,
-    utils::get_ip,
+    utils::{get_ip, sanitize_user},
 };
 use actix_identity::error::GetIdentityError;
 use actix_identity::Identity;
@@ -12,12 +13,14 @@ use async_sqlite::Pool;
 use serde::Deserialize;
 use zeroize::Zeroizing;
 
+/// Username and password sent by the client to login.
 #[derive(Deserialize)]
 pub struct Login {
     user: String,
     password: String,
 }
 
+/// Username, password and token sent by the client to register
 #[derive(Deserialize)]
 pub struct Register {
     user: String,
@@ -37,13 +40,8 @@ pub async fn register(
         let credentials = credentials.into_inner();
         let password = Zeroizing::new(credentials.password.into_bytes());
         let pool = pool.into_inner();
-        match auth::register_user(
-            &pool,
-            credentials.user.clone(),
-            &password,
-            credentials.token,
-        )
-        .await
+        match auth::register_user(&pool, credentials.user.clone(), password, credentials.token)
+            .await
         {
             Ok(_) => {
                 if let Err(err) = Identity::login(&req.extensions(), credentials.user.clone()) {
@@ -52,23 +50,19 @@ pub async fn register(
                         .to_response()
                 } else {
                     log::warn!(
-                        "host [{}] registered in as `{}`",
+                        "client [{}] registered as `{}`",
                         get_ip(&conn),
-                        &credentials.user
+                        sanitize_user(&credentials.user)
                     );
                     HttpResponse::Ok().body("")
                 }
             }
             Err(err) => {
-                if let AuthError::InvalidRegCredentials = err {
-                    log::warn!(
-                        "host [{}] tried to register as `{}`",
-                        get_ip(&conn),
-                        // Getting only needed chars to avoid malicious payloads,
-                        // due to the fact that here the username is unchecked
-                        &credentials.user[..(*config!(max_username_size) as usize)]
-                    );
-                }
+                log::warn!(
+                    "client [{}] tried to register as `{}`",
+                    get_ip(&conn),
+                    sanitize_user(&credentials.user)
+                );
                 err.to_response()
             }
         }
@@ -88,25 +82,27 @@ pub async fn login(
     let login = login.into_inner();
     let pool = pool.into_inner();
     let password = Zeroizing::new(login.password.into_bytes());
-    match auth::check(&pool, &login.user, &password).await {
+    match auth::check(&pool, &login.user, password).await {
         Ok(_) => {
             if let Err(err) = Identity::login(&req.extensions(), login.user.clone()) {
                 log::error!("Failed to build Identity: {err}");
                 AuthError::InternalError("Failed to build identity during login".into())
                     .to_response()
             } else {
-                log::warn!("host [{}] logged in as `{}`", get_ip(&conn), login.user);
+                log::warn!(
+                    "client [{}] logged in as `{}`",
+                    get_ip(&conn),
+                    sanitize_user(&login.user)
+                );
                 HttpResponse::Ok().body("")
             }
         }
         Err(err) => {
-            if let AuthError::InvalidCredentials = err {
-                log::warn!(
-                    "host [{}] tried to login as `{}`",
-                    get_ip(&conn),
-                    &login.user[..(*config!(max_username_size) as usize)]
-                );
-            }
+            log::warn!(
+                "client [{}] tried to login as `{}`",
+                get_ip(&conn),
+                sanitize_user(&login.user)
+            );
             err.to_response()
         }
     }

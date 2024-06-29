@@ -11,7 +11,7 @@ fn registration_link() -> Markup {
     }
 }
 
-pub fn page() -> Markup {
+pub fn page() -> String {
     html! {
         (DOCTYPE)
         html lang="en-US" {
@@ -22,7 +22,7 @@ pub fn page() -> Markup {
                 meta name="viewport" content="width=device-width, initial-scale=1.0";
                 meta name="tcloud-prefix" content=(config!(url_prefix));
                 link rel="icon" type="image/x-icon" href=(utils::make_url("/static/favicon.ico"));
-                script type="text/javascript" { (web_file!("login.js")) }
+                script type="text/javascript" { (web_file!("global.js")) (web_file!("login.js")) }
                 style { (web_file!("global.css")) (web_file!("login.css")) }
             }
             body {
@@ -36,9 +36,10 @@ pub fn page() -> Markup {
                     br; input type="password" id="password" name="password";
                     input value="Login" type="submit";
                 }
-                div id="errormsg";
-                (registration_link())
+                div id="msg" {}
+                div id="reglink" { (registration_link()) }
             }
         }
     }
+    .into()
 }

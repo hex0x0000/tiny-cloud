@@ -2,6 +2,7 @@
 mod macros;
 pub mod auth;
 pub mod plugins;
+pub mod token;
 use crate::config;
 use actix_web::{get, HttpResponse, Responder};
 use serde_json::json;
@@ -12,7 +13,7 @@ const INFO: OnceLock<String> = OnceLock::new();
 /// Returns server info
 #[get("/info")]
 pub async fn info() -> impl Responder {
-    HttpResponse::Ok().body(
+    HttpResponse::Ok().content_type("application/json").body(
         INFO.get_or_init(|| {
             json!({
                 "name": config!(server_name),

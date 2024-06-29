@@ -5,6 +5,8 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::OnceCell;
 
+pub const ERR_MSG: &'static str =
+    "Tried to access config while it wasn't opened yet. This is a bug";
 pub static CONFIG: OnceCell<Config> = OnceCell::const_new();
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

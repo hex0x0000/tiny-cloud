@@ -1,14 +1,15 @@
 pub mod cli;
-mod database;
 pub mod error;
 mod hash;
-mod utils;
 
 use crate::config;
+use crate::database;
+use crate::error::ErrToResponse;
+use crate::token::check_token;
 use async_sqlite::Pool;
-use error::{AuthError, DBError};
-
-use self::utils::now;
+use database::auth;
+use error::AuthError;
+use zeroize::Zeroizing;
 
 fn check_validity(username: &String, password: &Vec<u8>) -> Result<(), AuthError> {
     let user_len = username.len();
@@ -37,60 +38,38 @@ fn check_validity(username: &String, password: &Vec<u8>) -> Result<(), AuthError
     Ok(())
 }
 
-async fn check_token(pool: &Pool, token: String) -> Result<(), AuthError> {
-    let db_token = database::get_token(pool, token.clone())
-        .await
-        .map_err(|e| AuthError::InternalError(e.to_string()))?
-        .ok_or(AuthError::BadToken)?;
-    if db_token.token == token {
-        // Will panic in 292 billion years, be ready for that year!
-        let now = now().map_err(|e| e.into())? as i64;
-        if db_token.expire_date < now {
-            database::remove_expired_tokens(pool)
-                .await
-                .map_err(|e| e.into())?;
-            return Err(AuthError::BadToken);
-        }
-    } else {
-        return Err(AuthError::BadToken);
-    }
-    database::delete_token(pool, token)
-        .await
-        .map_err(|e| e.into())?;
-    Ok(())
-}
-
-pub async fn init_db() -> Option<Pool> {
-    match database::init_db().await {
-        Ok(pool) => Some(pool),
-        Err(e) => {
-            log::error!("Failed to init auth database: {e}");
-            None
-        }
-    }
-}
-
 /// Checks a user's password
-pub async fn check(pool: &Pool, username: &String, password: &Vec<u8>) -> Result<(), AuthError> {
-    check_validity(username, password)?;
-    let hash = database::get_user(pool, username.clone())
+pub async fn check(
+    pool: &Pool,
+    username: &String,
+    password: Zeroizing<Vec<u8>>,
+) -> Result<(), AuthError> {
+    check_validity(username, &password)?;
+    let dummy_hash = hash::create(password.clone()).await?;
+    match auth::get_user(pool, username.clone())
         .await
         .map_err(|e| e.into())?
-        .ok_or(AuthError::InvalidCredentials)?
-        .pass_hash;
-    hash::verify(password, &hash)
+    {
+        Some(user) => hash::verify(password, user.pass_hash).await,
+        None => {
+            // Dummy verification to keep the same response timings when the user is not found.
+            // Keeps malicious attackers from scanning the server for usernames
+            let _ = hash::verify(password, dummy_hash).await;
+            Err(AuthError::InvalidCredentials)
+        }
+    }
 }
 
 /// Adds a new user. Fails if username already exists
 pub async fn add_user(
     pool: &Pool,
     username: String,
-    password: &Vec<u8>,
+    password: Zeroizing<Vec<u8>>,
     is_admin: bool,
 ) -> Result<(), AuthError> {
-    check_validity(&username, password)?;
-    let passwd_hash = hash::create(password)?;
-    database::add_user(pool, username, passwd_hash, is_admin)
+    check_validity(&username, &password)?;
+    let passwd_hash = hash::create(password).await?;
+    auth::add_user(pool, username, passwd_hash, is_admin)
         .await
         .map_err(|e| e.into())?;
     Ok(())
@@ -101,20 +80,24 @@ pub async fn add_user(
 pub async fn register_user(
     pool: &Pool,
     username: String,
-    password: &Vec<u8>,
+    password: Zeroizing<Vec<u8>>,
     token: String,
-) -> Result<(), AuthError> {
-    check_validity(&username, password)?;
-    check_token(pool, token).await?;
-    let passwd_hash = hash::create(password)?;
-    database::add_user(pool, username, passwd_hash, false)
+) -> Result<(), Box<dyn ErrToResponse>> {
+    check_validity(&username, &password).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    check_token(pool, token)
         .await
-        .map_err(|e| e.into())?;
+        .map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    let passwd_hash = hash::create(password)
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    auth::add_user(pool, username, passwd_hash, false)
+        .await
+        .map_err(|e| Box::new(Into::<AuthError>::into(e)) as Box<dyn ErrToResponse>)?;
     Ok(())
 }
 
 pub async fn delete_user(pool: &Pool, username: String) -> Result<(), AuthError> {
-    database::delete_user(&pool, username)
+    auth::delete_user(&pool, username)
         .await
         .map_err(|e| e.into())?;
     Ok(())

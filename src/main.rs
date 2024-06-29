@@ -1,10 +1,13 @@
 mod api;
 mod auth;
 mod config;
+mod database;
+mod error;
 mod logging;
 mod plugins;
 #[cfg(not(feature = "no-tls"))]
 mod tls;
+mod token;
 mod utils;
 mod webui;
 #[macro_use]
@@ -78,7 +81,8 @@ async fn server(secret_key: Key, database: Pool) -> Result<(), String> {
             .service(
                 web::scope(&utils::make_url("/ui"))
                     .service(webui::root)
-                    .service(webui::register_page),
+                    .service(webui::register_page)
+                    .service(webui::login_page),
             )
             .service(
                 web::scope(&utils::make_url("/api"))
@@ -91,8 +95,15 @@ async fn server(secret_key: Key, database: Pool) -> Result<(), String> {
                     .service(
                         web::scope("/auth")
                             .service(api::auth::login)
+                            .service(api::auth::register)
                             .service(api::auth::logout)
                             .service(api::auth::delete),
+                    )
+                    .service(
+                        web::scope("/token")
+                            .service(api::token::new)
+                            .service(api::token::delete)
+                            .service(api::token::list),
                     ),
             )
     });
@@ -112,7 +123,7 @@ async fn server(secret_key: Key, database: Pool) -> Result<(), String> {
         {
             log::info!("Binding to {binding} with TLS (rustls)");
             server
-                .bind_rustls_0_22(binding, tls::get_rustls_config(config!(tls))?)
+                .bind_rustls_0_23(binding, tls::get_rustls_config(config!(tls))?)
                 .map_err(|e| format!("Failed to bind server with TLS (rustls): {e}"))?
         }
 
@@ -131,8 +142,7 @@ async fn server(secret_key: Key, database: Pool) -> Result<(), String> {
     plugins::init();
 
     log::info!(
-        "Starting server with {} workers on version {}...",
-        config!(server.workers),
+        "Starting server on version {}...",
         env!("CARGO_PKG_VERSION"),
     );
     server
@@ -187,10 +197,12 @@ async fn main() {
     }
     let secret_key = Key::from(&secret_key[..64]);
 
-    let database = if let Some(database) = auth::init_db().await {
-        database
-    } else {
-        return;
+    let database = match database::init_db().await {
+        Ok(db) => db,
+        Err(e) => {
+            log::error!("Failed to open database: {e}");
+            return;
+        }
     };
 
     if let Err(e) = server(secret_key, database).await {

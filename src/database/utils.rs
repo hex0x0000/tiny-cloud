@@ -1,4 +1,4 @@
-use crate::auth::DBError;
+use super::error::DBError;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub fn now() -> Result<u64, DBError> {

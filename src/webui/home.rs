@@ -1,7 +1,7 @@
 use crate::{config, utils, web_file};
-use maud::{html, Markup, PreEscaped, DOCTYPE};
+use maud::{html, PreEscaped, DOCTYPE};
 
-pub fn page(username: String) -> Markup {
+pub fn page(username: String) -> String {
     html! {
         (DOCTYPE)
         html lang="en-US" {
@@ -19,4 +19,5 @@ pub fn page(username: String) -> Markup {
             }
         }
     }
+    .into()
 }

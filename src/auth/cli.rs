@@ -1,6 +1,6 @@
 use crate::auth::{add_user, database, error::AuthError};
 use std::io::{self, Write};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 pub async fn create_user() -> Result<(), String> {
     // Init DB
@@ -17,7 +17,7 @@ pub async fn create_user() -> Result<(), String> {
     let user = input.trim().to_string();
 
     // Gets password from CLI using a safe input
-    let mut password = {
+    let password = {
         let first = rpassword::prompt_password("Password: ")
             .expect("Failed to read password")
             .into_bytes();
@@ -29,9 +29,10 @@ pub async fn create_user() -> Result<(), String> {
             return Err("Passwords do not match.".into());
         } else {
             second.zeroize();
-            first
+            Zeroizing::new(first)
         }
     };
+    let pass_len = password.len();
 
     // Make user admin?
     print!("Make user admin? [y/n] ");
@@ -43,7 +44,7 @@ pub async fn create_user() -> Result<(), String> {
     let is_admin = input.trim().to_string().to_lowercase() == "y";
 
     // Add user to DB
-    add_user(&pool, user.clone(), &password, is_admin)
+    add_user(&pool, user.clone(), password, is_admin)
         .await
         .map_err(|e| match e {
             AuthError::InvalidRegCredentials => format!("{e}"),
@@ -54,17 +55,13 @@ pub async fn create_user() -> Result<(), String> {
     if is_admin {
         println!(
             "Successfully added admin {} with password length {}",
-            user,
-            password.len()
+            user, pass_len
         );
     } else {
         println!(
             "Successfully added user {} with password length {}",
-            user,
-            password.len()
+            user, pass_len
         );
     }
-
-    password.zeroize();
     Ok(())
 }

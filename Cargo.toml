@@ -2,7 +2,7 @@
 name = "tiny-cloud"
 authors = ["hex0x0000 <hex0x0000@protonmail.com>"]
 description = "Fast, lightweight, self-hosted, KISS (Keep It Simple, Stupid) personal cloud"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 [dependencies]
@@ -20,7 +20,7 @@ argon2 = "0.5"
 rand = "0.8"
 zeroize = { version = "1.6", features = [ "zeroize_derive" ] }
 rpassword = "7"
-maud = { version = "0.26", features = [ "actix-web" ] }
+maud = "0.26"
 async-sqlite = { version = "0.2", default-features = false }
 mutually_exclusive_features = "0.1"
 
@@ -35,15 +35,14 @@ systemd-journal-logger = { version = "2", optional = true }
 
 # TLS
 openssl = { version = "0.10", optional = true }
-rustls = { version = "0.22", optional = true }
+rustls = { version = "0.23", optional = true }
 rustls-pemfile = { version = "2", optional = true }
 
 # Plugins
 tcloud-archive = { path = "../tcloud-archive", optional = true }
 
 [features]
-#default = [ "normal-log", "rustls", "archive" ]
-default = [ "normal-log", "no-tls", "archive" ]
+default = [ "normal-log", "openssl", "archive" ]
 
 # Logging
 normal-log = [ "dep:simplelog" ]
@@ -53,7 +52,7 @@ systemd-log = [ "dep:systemd-journal-logger" ]
 # TLS
 no-tls = []
 openssl = [ "dep:openssl", "actix-web/openssl" ]
-rustls = [ "dep:rustls-pemfile", "dep:rustls", "actix-web/rustls-0_22" ]
+rustls = [ "dep:rustls-pemfile", "dep:rustls", "actix-web/rustls-0_23" ]
 
 # Database
 sqlite-bundled = [ "async-sqlite/bundled" ]
