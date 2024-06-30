@@ -51,19 +51,17 @@ pub fn init_logging() -> Result<(), String> {
             ),
         ])
         .map_err(|e| format!("Failed to initialize combined logger: {e}"))?;
+    } else if *config!(logging.terminal) {
+        TermLogger::init(
+            level_filter,
+            Config::default(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        )
+        .map_err(|e| format!("Failed to initialize terminal logger: {e}"))?;
     } else {
-        if *config!(logging.terminal) {
-            TermLogger::init(
-                level_filter,
-                Config::default(),
-                TerminalMode::Mixed,
-                ColorChoice::Auto,
-            )
-            .map_err(|e| format!("Failed to initialize terminal logger: {e}"))?;
-        } else {
-            SimpleLogger::init(level_filter, Config::default())
-                .map_err(|e| format!("Failed to initialize simple logger: {e}"))?;
-        };
+        SimpleLogger::init(level_filter, Config::default())
+            .map_err(|e| format!("Failed to initialize simple logger: {e}"))?;
     }
     Ok(())
 }

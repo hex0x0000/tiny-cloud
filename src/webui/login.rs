@@ -2,7 +2,7 @@ use crate::{config, utils, web_file};
 use maud::{html, Markup, PreEscaped, DOCTYPE};
 
 fn registration_link() -> Markup {
-    if let Some(_) = config!(registration) {
+    if config!(registration).is_some() {
         html! {
             a href=(utils::make_url("/ui/register")) { "Register Here" }
         }

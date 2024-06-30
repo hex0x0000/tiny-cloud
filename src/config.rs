@@ -5,8 +5,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::OnceCell;
 
-pub const ERR_MSG: &'static str =
-    "Tried to access config while it wasn't opened yet. This is a bug";
+pub const ERR_MSG: &str = "Tried to access config while it wasn't opened yet. This is a bug";
 pub static CONFIG: OnceCell<Config> = OnceCell::const_new();
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -65,8 +64,8 @@ fn get_exec_dir() -> Result<String, String> {
     path.pop();
     Ok(path
         .to_str()
-        .ok_or_else(|| format!("Failed to get executable's path"))?
-        .to_string())
+        .ok_or("Failed to get executable's path")?
+        .into())
 }
 
 impl Config {
@@ -146,7 +145,7 @@ pub async fn write_default() -> Result<(), String> {
     let default = Config::default()?;
     let default =
         serde_yaml::to_string(&default).map_err(|e| format!("Failed to serialize config: {e}"))?;
-    file.write_all(&mut default.as_bytes())
+    file.write_all(default.as_bytes())
         .await
         .map_err(|e| format!("Failed to write config: {e}"))?;
     Ok(())

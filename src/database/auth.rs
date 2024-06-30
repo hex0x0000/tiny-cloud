@@ -107,17 +107,16 @@ fn get_user_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<User> {
 /// Returns a user. User contains the TOTP secret depending on wether or not
 /// the "totp-auth" feature is enabled.
 pub async fn get_user(pool: &Pool, username: String) -> Result<Option<User>, DBError> {
-    Ok(pool
-        .conn(|conn| {
-            conn.query_row(
-                "SELECT * FROM users WHERE username=?1",
-                [username],
-                get_user_row,
-            )
-            .optional()
-        })
-        .await
-        .map_err(|e| DBError::ExecError(format!("Failed to get user: {e}")))?)
+    pool.conn(|conn| {
+        conn.query_row(
+            "SELECT * FROM users WHERE username=?1",
+            [username],
+            get_user_row,
+        )
+        .optional()
+    })
+    .await
+    .map_err(|e| DBError::ExecError(format!("Failed to get user: {e}")))
 }
 
 /// Deletes a user from database

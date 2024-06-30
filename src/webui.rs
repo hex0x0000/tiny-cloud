@@ -25,8 +25,8 @@ pub async fn root(req: HttpRequest, user: Option<Identity>) -> impl Responder {
 
 #[get("/register")]
 pub async fn register_page(req: HttpRequest, user: Option<Identity>) -> impl Responder {
-    if let Some(_) = *config!(registration) {
-        if let None = user {
+    if config!(registration).is_some() {
+        if user.is_none() {
             HttpResponse::Ok().body(register::page())
         } else {
             Redirect::to(utils::make_url("/ui"))
@@ -41,7 +41,7 @@ pub async fn register_page(req: HttpRequest, user: Option<Identity>) -> impl Res
 
 #[get("/login")]
 pub async fn login_page(req: HttpRequest, user: Option<Identity>) -> impl Responder {
-    if let None = user {
+    if user.is_none() {
         HttpResponse::Ok().body(login::page())
     } else {
         Redirect::to(utils::make_url("/ui"))

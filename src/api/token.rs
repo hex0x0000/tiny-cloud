@@ -67,7 +67,7 @@ pub async fn delete(
     pool: web::Data<Pool>,
     token: web::Json<TokenInfo>,
 ) -> impl Responder {
-    if let Some(_) = config!(registration) {
+    if config!(registration).is_some() {
         let username = get_user!(user.id());
         let pool = pool.into_inner();
         let token = token.into_inner();
@@ -86,7 +86,7 @@ pub async fn delete(
 /// Returns a list of every token with their expire dates
 #[get("/list")]
 pub async fn list(user: Identity, pool: web::Data<Pool>) -> impl Responder {
-    if let Some(_) = config!(registration) {
+    if config!(registration).is_some() {
         let username = get_user!(user.id());
         let pool = pool.into_inner();
         if let Err(e) = check_admin(&pool, username).await {

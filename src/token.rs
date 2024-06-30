@@ -46,12 +46,12 @@ pub async fn remove_token(
 }
 
 pub async fn get_all_tokens(pool: &Pool) -> Result<Vec<Value>, TokenError> {
-    Ok(token::get_all_tokens(pool)
+    token::get_all_tokens(pool)
         .await
         .map(|v| {
             v.iter()
                 .map(|t| json! ({"id": t.id, "token": t.token.clone(), "expire": t.expire_date}))
                 .collect::<Vec<Value>>()
         })
-        .map_err(|e| e.into())?)
+        .map_err(|e| e.into())
 }

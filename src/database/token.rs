@@ -63,37 +63,35 @@ pub async fn create_token(
 
 /// Gets token's data (id and expire date) if it exists
 pub async fn get_token(pool: &Pool, token: String) -> Result<Option<Token>, DBError> {
-    Ok(pool
-        .conn(|conn| {
-            conn.query_row("SELECT * FROM tokens WHERE token=?1", [token], |row| {
-                Ok(Token {
-                    id: row.get(0)?,
-                    token: row.get(1)?,
-                    expire_date: row.get(2)?,
-                })
+    pool.conn(|conn| {
+        conn.query_row("SELECT * FROM tokens WHERE token=?1", [token], |row| {
+            Ok(Token {
+                id: row.get(0)?,
+                token: row.get(1)?,
+                expire_date: row.get(2)?,
             })
-            .optional()
         })
-        .await
-        .map_err(|e| DBError::ExecError(format!("Failed to get token: {e}")))?)
+        .optional()
+    })
+    .await
+    .map_err(|e| DBError::ExecError(format!("Failed to get token: {e}")))
 }
 
 /// Gets all saved tokens
 pub async fn get_all_tokens(pool: &Pool) -> Result<Vec<Token>, DBError> {
-    Ok(pool
-        .conn(|conn| {
-            let mut stmt = conn.prepare("SELECT * FROM tokens")?;
-            let rows = stmt.query_map([], |row| {
-                Ok(Token {
-                    id: row.get(0)?,
-                    token: row.get(1)?,
-                    expire_date: row.get(2)?,
-                })
-            })?;
-            rows.collect()
-        })
-        .await
-        .map_err(|e| DBError::ExecError(format!("Failed to get tokens: {e}")))?)
+    pool.conn(|conn| {
+        let mut stmt = conn.prepare("SELECT * FROM tokens")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(Token {
+                id: row.get(0)?,
+                token: row.get(1)?,
+                expire_date: row.get(2)?,
+            })
+        })?;
+        rows.collect()
+    })
+    .await
+    .map_err(|e| DBError::ExecError(format!("Failed to get tokens: {e}")))
 }
 
 /// Removes a token

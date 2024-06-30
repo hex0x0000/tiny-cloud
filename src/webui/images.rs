@@ -2,8 +2,8 @@ use actix_web::HttpResponse;
 
 use crate::image;
 
-const FAVICON: &'static [u8] = image!("favicon.ico");
-const LOGO: &'static [u8] = image!("tiny-cloud-logo-256.png");
+const FAVICON: &[u8] = image!("favicon.ico");
+const LOGO: &[u8] = image!("tiny-cloud-logo-256.png");
 
 pub async fn favicon() -> HttpResponse {
     HttpResponse::Ok()

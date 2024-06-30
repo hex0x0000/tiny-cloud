@@ -14,7 +14,6 @@ macro_rules! set_plugin {
 #[macro_export]
 macro_rules! config {
     ($( $config:ident ).* ) => {{
-        use crate::config::{CONFIG, ERR_MSG};
-        &CONFIG.get().expect(ERR_MSG)$(.$config)*
+        &crate::config::CONFIG.get().expect(crate::config::ERR_MSG)$(.$config)*
     }};
 }

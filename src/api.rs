@@ -8,7 +8,7 @@ use actix_web::{get, HttpResponse, Responder};
 use serde_json::json;
 use std::sync::OnceLock;
 
-const INFO: OnceLock<String> = OnceLock::new();
+static INFO: OnceLock<String> = OnceLock::new();
 
 /// Returns server info
 #[get("/info")]

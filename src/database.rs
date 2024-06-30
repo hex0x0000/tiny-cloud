@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use token::TOKEN_TABLE;
 
 fn get_tables() -> String {
-    if let Some(_) = config!(registration) {
+    if config!(registration).is_some() {
         format!("BEGIN;\n{USERS_TABLE}\n{TOKEN_TABLE}\nCOMMIT;")
     } else {
         format!("BEGIN;\n{USERS_TABLE}\nCOMMIT;")

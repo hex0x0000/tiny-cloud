@@ -36,7 +36,7 @@ pub async fn register(
     credentials: web::Json<Register>,
     pool: web::Data<Pool>,
 ) -> impl Responder {
-    if let Some(_) = config!(registration) {
+    if config!(registration).is_some() {
         let credentials = credentials.into_inner();
         let password = Zeroizing::new(credentials.password.into_bytes());
         let pool = pool.into_inner();

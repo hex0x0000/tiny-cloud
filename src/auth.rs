@@ -11,7 +11,7 @@ use database::auth;
 use error::AuthError;
 use zeroize::Zeroizing;
 
-fn check_validity(username: &String, password: &Vec<u8>) -> Result<(), AuthError> {
+fn check_validity(username: &str, password: &[u8]) -> Result<(), AuthError> {
     let user_len = username.len();
     let passwd_len = password.len();
     let max_username_size = *config!(max_username_size) as usize;
