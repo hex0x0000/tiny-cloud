@@ -10,7 +10,7 @@ pub struct User {
     pub username: String,
     pub pass_hash: String,
     #[cfg(feature = "totp-auth")]
-    pub totp_secret: String,
+    pub totp: String,
     pub is_admin: bool,
 }
 
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS users (
     id          INTEGER PRIMARY KEY,
     username    TEXT    NOT NULL,
     pass_hash   TEXT    NOT NULL,
-    totp_secret TEXT    NOT NULL,
+    totp        TEXT    NOT NULL,
     is_admin    INTEGER DEFAULT 0,
     UNIQUE(username)
 );";
@@ -40,7 +40,7 @@ const INSERT_USER: &str =
     "INSERT INTO users (username, pass_hash, is_admin) VALUES (:username, :pass_hash, :is_admin)";
 
 #[cfg(feature = "totp-auth")]
-const INSERT_USER: &str = "INSERT INTO users (username, pass_hash, totp-secret, is_admin) VALUES (:username, :pass_hash, :totp-secret, :is_admin)";
+const INSERT_USER: &str = "INSERT INTO users (username, pass_hash, totp, is_admin) VALUES (:username, :pass_hash, :totp, :is_admin)";
 
 /// Adds a new user to the database, fails if it already exists.
 /// If TOTP feature is enabled, it requires the totp-secret to be inserted
@@ -48,7 +48,7 @@ pub async fn add_user(
     pool: &Pool,
     username: String,
     pass_hash: String,
-    #[cfg(feature = "totp-auth")] totp_secret: String,
+    #[cfg(feature = "totp-auth")] totp: String,
     is_admin: bool,
 ) -> Result<(), DBError> {
     pool.conn(move |conn| {
@@ -64,7 +64,7 @@ pub async fn add_user(
             named_params! {
                 ":username": username,
                 ":pass_hash": pass_hash,
-                ":totp_secret": totp_secret,
+                ":totp": totp,
                 ":is_admin": is_admin,
             },
         )
@@ -99,7 +99,7 @@ fn get_user_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<User> {
         id: row.get(0)?,
         username: row.get(1)?,
         pass_hash: row.get(2)?,
-        totp_secret: row.get(3)?,
+        totp: row.get(3)?,
         is_admin: row.get(4)?,
     })
 }

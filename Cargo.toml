@@ -21,7 +21,7 @@ rand = "0.8"
 zeroize = { version = "1.6", features = [ "zeroize_derive" ] }
 rpassword = "7"
 maud = "0.26"
-async-sqlite = { version = "0.2", default-features = false }
+async-sqlite = { version = "0.3", default-features = false }
 mutually_exclusive_features = "0.1"
 
 # Common library
@@ -38,11 +38,14 @@ openssl = { version = "0.10", optional = true }
 rustls = { version = "0.23", optional = true }
 rustls-pemfile = { version = "2", optional = true }
 
+# Authentication
+totp-rs = { version = "5.5", features = [ "qr", "otpauth" ], optional = true }
+
 # Plugins
 tcloud-archive = { path = "../tcloud-archive", optional = true }
 
 [features]
-default = [ "normal-log", "openssl", "archive" ]
+default = [ "normal-log", "totp-auth", "openssl", "archive" ]
 
 # Logging
 normal-log = [ "dep:simplelog" ]
@@ -58,7 +61,7 @@ rustls = [ "dep:rustls-pemfile", "dep:rustls", "actix-web/rustls-0_23" ]
 sqlite-bundled = [ "async-sqlite/bundled" ]
 
 # Authentication
-totp-auth = []
+totp-auth = [ "dep:totp-rs" ]
 
 # Plugins
 archive = [ "dep:tcloud-archive" ]

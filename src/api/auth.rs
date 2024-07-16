@@ -18,6 +18,8 @@ use zeroize::Zeroizing;
 pub struct Login {
     user: String,
     password: String,
+    #[cfg(feature = "totp-auth")]
+    totp: String,
 }
 
 /// Username, password and token sent by the client to register
@@ -26,9 +28,12 @@ pub struct Register {
     user: String,
     password: String,
     token: String,
+    #[cfg(feature = "totp-auth")]
+    totp_as_qr: bool,
 }
 
 /// Registers new user and starts a new session
+#[cfg(not(feature = "totp-auth"))]
 #[post("/register")]
 pub async fn register(
     req: HttpRequest,
@@ -45,16 +50,69 @@ pub async fn register(
         {
             Ok(_) => {
                 if let Err(err) = Identity::login(&req.extensions(), credentials.user.clone()) {
-                    log::error!("Failed to build Identity: {err}");
-                    AuthError::InternalError("Failed to build identity during registration".into())
-                        .to_response()
+                    return AuthError::InternalError(format!(
+                        "Failed to build identity during registration: {err}"
+                    ))
+                    .to_response();
+                }
+                log::warn!(
+                    "client [{}] registered as `{}`",
+                    get_ip(&conn),
+                    sanitize_user(&credentials.user)
+                );
+                HttpResponse::Ok().body("")
+            }
+            Err(err) => {
+                log::warn!(
+                    "client [{}] tried to register as `{}`",
+                    get_ip(&conn),
+                    sanitize_user(&credentials.user)
+                );
+                err.to_response()
+            }
+        }
+    } else {
+        HttpResponse::NotFound().body("")
+    }
+}
+
+/// Registers new user and starts a new session.
+/// Returns the TOTP as a url or qr code depending on the request
+#[cfg(feature = "totp-auth")]
+#[post("/register")]
+pub async fn register(
+    req: HttpRequest,
+    conn: ConnectionInfo,
+    credentials: web::Json<Register>,
+    pool: web::Data<Pool>,
+) -> impl Responder {
+    use serde_json::json;
+
+    if config!(registration).is_some() {
+        let credentials = credentials.into_inner();
+        let password = Zeroizing::new(credentials.password.into_bytes());
+        let pool = pool.into_inner();
+        match auth::register_user(&pool, credentials.user.clone(), password, credentials.token)
+            .await
+        {
+            Ok(totp) => {
+                if let Err(err) = Identity::login(&req.extensions(), credentials.user.clone()) {
+                    return AuthError::InternalError(format!(
+                        "Failed to build identity during registration: {err}"
+                    ))
+                    .to_response();
+                }
+                log::warn!(
+                    "client [{}] registered as `{}`",
+                    get_ip(&conn),
+                    sanitize_user(&credentials.user)
+                );
+                let mut resp = HttpResponse::Ok();
+                resp.content_type("application/json");
+                if credentials.totp_as_qr {
+                    resp.body(json!({ "totp_qr": totp.get_qr_base64() }).to_string())
                 } else {
-                    log::warn!(
-                        "client [{}] registered as `{}`",
-                        get_ip(&conn),
-                        sanitize_user(&credentials.user)
-                    );
-                    HttpResponse::Ok().body("")
+                    resp.body(json!({ "totp_url": totp.get_url() }).to_string())
                 }
             }
             Err(err) => {
@@ -72,6 +130,7 @@ pub async fn register(
 }
 
 /// Logins and starts a new session
+#[cfg(not(feature = "totp-auth"))]
 #[post("/login")]
 pub async fn login(
     req: HttpRequest,
@@ -85,17 +144,55 @@ pub async fn login(
     match auth::check(&pool, &login.user, password).await {
         Ok(_) => {
             if let Err(err) = Identity::login(&req.extensions(), login.user.clone()) {
-                log::error!("Failed to build Identity: {err}");
-                AuthError::InternalError("Failed to build identity during login".into())
-                    .to_response()
-            } else {
-                log::warn!(
-                    "client [{}] logged in as `{}`",
-                    get_ip(&conn),
-                    sanitize_user(&login.user)
-                );
-                HttpResponse::Ok().body("")
+                return AuthError::InternalError(format!(
+                    "Failed to build identity during registration: {err}"
+                ))
+                .to_response();
             }
+            log::warn!(
+                "client [{}] logged in as `{}`",
+                get_ip(&conn),
+                sanitize_user(&login.user)
+            );
+            HttpResponse::Ok().body("")
+        }
+        Err(err) => {
+            log::warn!(
+                "client [{}] tried to login as `{}`",
+                get_ip(&conn),
+                sanitize_user(&login.user)
+            );
+            err.to_response()
+        }
+    }
+}
+
+/// Logins and starts a new session
+#[cfg(feature = "totp-auth")]
+#[post("/login")]
+pub async fn login(
+    req: HttpRequest,
+    conn: ConnectionInfo,
+    login: web::Json<Login>,
+    pool: web::Data<Pool>,
+) -> impl Responder {
+    let login = login.into_inner();
+    let pool = pool.into_inner();
+    let password = Zeroizing::new(login.password.into_bytes());
+    match auth::check(&pool, &login.user, password, login.totp).await {
+        Ok(_) => {
+            if let Err(err) = Identity::login(&req.extensions(), login.user.clone()) {
+                return AuthError::InternalError(format!(
+                    "Failed to build identity during registration: {err}"
+                ))
+                .to_response();
+            }
+            log::warn!(
+                "client [{}] logged in as `{}`",
+                get_ip(&conn),
+                sanitize_user(&login.user)
+            );
+            HttpResponse::Ok().body("")
         }
         Err(err) => {
             log::warn!(

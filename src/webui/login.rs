@@ -34,6 +34,14 @@ pub fn page() -> String {
                     br; input type="text" id="user" name="user";
                     br; label for="password" { "Password:" }
                     br; input type="password" id="password" name="password";
+                    (
+                        if cfg!(feature = "totp-auth") {
+                            html! {
+                                br; label for="totp" { "TOTP Token:" }
+                                br; input type="totp" id="totp" name="totp";
+                            }
+                        } else { html!() }
+                    )
                     input value="Login" type="submit";
                 }
                 div id="msg" {}

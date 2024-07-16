@@ -10,8 +10,6 @@ pub enum DBError {
     ExecError(String),
     #[error("User already exists")]
     UserExists,
-    #[error("Feature `{0}` is not enabled")]
-    NotEnabled(String),
     #[error("Time failure: {0}")]
     TimeFailure(String),
 }

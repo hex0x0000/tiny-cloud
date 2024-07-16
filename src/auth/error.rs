@@ -11,6 +11,9 @@ pub enum AuthError {
     InvalidCredentials,
     #[error("Invalid registration credentials")]
     InvalidRegCredentials,
+    #[cfg(feature = "totp-auth")]
+    #[error("Invalid TOTP token")]
+    InvalidTOTP,
 }
 
 impl ErrToResponse for AuthError {
@@ -24,6 +27,8 @@ impl ErrToResponse for AuthError {
             Self::InvalidCredentials => stringify!(InvalidCredentials),
             Self::InvalidRegCredentials => stringify!(InvalidRegCredentials),
             Self::InternalError(_) => stringify!(InternalError),
+            #[cfg(feature = "totp-auth")]
+            Self::InvalidTOTP => stringify!(InvalidTOTP),
         }
     }
 
@@ -36,6 +41,8 @@ impl ErrToResponse for AuthError {
             Self::BadCredentials(_) => 400,
             Self::InvalidCredentials => 401,
             Self::InvalidRegCredentials => 401,
+            #[cfg(feature = "totp-auth")]
+            Self::InvalidTOTP => 401,
             Self::InternalError(_) => 500,
         }
     }

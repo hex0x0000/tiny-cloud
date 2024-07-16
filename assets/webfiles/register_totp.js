@@ -11,6 +11,12 @@ function setErrorMsg(msg) {
 }
 
 async function submit(form) {
+	var formData = Object.fromEntries(new FormData(form));
+	if (formData.totp_as_qr == "on") {
+		formData.totp_as_qr = true;
+	} else {
+		formData.totp_as_qr = false;	
+	}
 	let response = await fetch(prefix + 'api/auth/register', {
 		method: "POST",
 		mode: "same-origin",
@@ -21,7 +27,7 @@ async function submit(form) {
 		},
 		redirect: "follow",
 		referrerPolicy: "no-referrer",
-		body: JSON.stringify(Object.fromEntries(new FormData(form))),
+		body: JSON.stringify(formData)
 	});
 
 	if (response.status !== 200) {
@@ -35,14 +41,23 @@ async function submit(form) {
 			setErrorMsg("Unknown error... check logs if this persists");
 		}
 	} else {
-		window.location.reload();
+		let resp = await response.json();
+		console.log(resp);
+		document.getElementById('form').setAttribute("hidden");
+		document.getElementById('totp').removeAttribute("hidden");
+		if (formData.totp_as_qr) {
+			let img = document.getElementById('totp-qr');
+			img.setAttribute("src", resp.totp_qr);
+			img.removeAttribute("hidden");
+		} else {
+			document.getElementById('totp-url').innerHTML = resp.totp_url;
+		}
 	}
 }
 
 window.onload = function() {
-	var register = document.getElementById('register');
-	register.onsubmit = function(event) {
-		event.preventDefault();
+	document.getElementById('register').onsubmit = function(e) {
+		e.preventDefault();
 		try {
 			setMsg("Registering...");
 			submit(register);
@@ -52,4 +67,7 @@ window.onload = function() {
 		}
 		return false;
 	};
+	document.getElementById('continue').onclick = function(e) {
+		window.location.reload();
+	}
 }
