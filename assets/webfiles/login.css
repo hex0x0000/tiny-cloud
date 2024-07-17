@@ -8,7 +8,7 @@ body {
 #title {
 	font-weight: bold;
 	font-size: 400%;
-	text-shadow: 2px 2px 10px #31d9ff;
+	text-shadow: 2px 2px 10px var(--main-color);
 }
 
 #version {
@@ -16,21 +16,61 @@ body {
 }
 
 #description {
-	font-size: 170%;
+	font-size: 150%;
 	color: grey;
 }
 
 #login {
+	margin-top: 5%;
+	margin-bottom: 1%;
 	font-size: 150%;
+	border-width: 2px;
+	border-style: solid;
+	border-color: var(--main-color);
+	border-radius: 10px;
+	display: inline-block;
 }
 
-#user, #password {
-	width: 25%;
+#user, #password, #totp {
+	width: 80%;
+}
+
+#btn {
+	width: 30%;
+	color: black;
+	font-weight: bold;
+	background-color: var(--main-color);
+	border-color: var(--main-color);
+	transition-duration: 0.3s;
+}
+
+#btn:hover {
+	border-color: white;
+	transition-duration: 0.3s;
+}
+
+#btn:active {
+	background-color: black;
+	color: var(--main-color);
+	border-color: var(--main-color);
+	transition-duration: 0.3s;
+}
+
+#btn:disabled {
+	background-color: lightgrey;
+	border-color: lightgrey;
+	color: grey;
+	pointer-events: none;
+	transition-duration: 0.3s;
+}
+
+#user, #password, #totp, #btn {
 	padding-top: 0.9%;
 	padding-right: 1%;
 	padding-bottom: 0.9%;
 	padding-left: 1%;
 	border-radius: 10px;
+	margin-bottom: 10px;
 	font-size: 100%;
 }
 

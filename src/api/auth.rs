@@ -110,7 +110,13 @@ pub async fn register(
                 let mut resp = HttpResponse::Ok();
                 resp.content_type("application/json");
                 if credentials.totp_as_qr {
-                    resp.body(json!({ "totp_qr": totp.get_qr_base64() }).to_string())
+                    match totp.get_qr_base64() {
+                        Ok(qr) => resp.body(json!({ "totp_qr": qr }).to_string()),
+                        Err(e) => AuthError::InternalError(format!(
+                            "Failed to get TOTP QR code image as base64: {e}"
+                        ))
+                        .to_response(),
+                    }
                 } else {
                     resp.body(json!({ "totp_url": totp.get_url() }).to_string())
                 }

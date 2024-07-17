@@ -42,7 +42,7 @@ pub fn page() -> String {
                             }
                         } else { html!() }
                     )
-                    input value="Login" type="submit";
+                    br; input value="Login" type="submit" id="btn";
                 }
                 div id="msg" {}
                 div id="reglink" { (registration_link()) }

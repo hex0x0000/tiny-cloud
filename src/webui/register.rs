@@ -15,9 +15,11 @@ fn form() -> Markup {
             br; input type="text" id="user" name="user";
             br; label for="password" { "Password:" }
             br; input type="password" id="password" name="password";
-            br; label for="token" { "Token:" }
+            br; label for="password_rep" { "Repeat Password:" }
+            br; input type="password" id="password_rep" name="password_rep";
+            br; label for="token" { "Registration Token:" }
             br; input type="text" id="token" name="token";
-            input value="Register" type="submit";
+            input value="Register" type="submit" id="btn";
         }
     }
 }
@@ -30,15 +32,16 @@ fn form() -> Markup {
             br; input type="text" id="user" name="user";
             br; label for="password" { "Password:" }
             br; input type="password" id="password" name="password";
-            br; label for="token" { "Token:" }
+            br; label for="password_rep" { "Repeat Password:" }
+            br; input type="password" id="password_rep" name="password_rep";
+            br; label for="token" { "Registration Token:" }
             br; input type="text" id="token" name="token";
-            br; label for="totp_as_qr" { "Show TOTP as a qr?" }
-            br; input type="checkbox" id="totp_as_qr" name="totp_as_qr";
-            input value="Register" type="submit";
+            br; label for="totp_as_qr" { "Show TOTP as a QR Code?" }
+            input type="checkbox" id="totp_as_qr" name="totp_as_qr";
+            br; input value="Register" type="submit" id="btn";
         }
         div id="totp" hidden {
-            br;
-            img id="totp-qr" hidden;
+            br; img id="totp-qr" hidden;
             div id="totp-url" {}
             p { "Save this in your TOTP app. You won't be able to access to it anymore after you click Continue." }
             button type="button" id="continue" { "Continue" }
@@ -65,7 +68,7 @@ pub fn page() -> String {
                 p; div id="version" { (env!("CARGO_PKG_VERSION")) }
                 p; div id="description" { (config!(description)) }
                 (form())
-                div id="msg";
+                div id="msg" {}
             }
         }
     }

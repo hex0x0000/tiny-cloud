@@ -8,6 +8,7 @@ use auth::USERS_TABLE;
 use error::DBError;
 use std::path::PathBuf;
 use token::TOKEN_TABLE;
+use tokio::fs;
 
 fn get_tables() -> String {
     if config!(registration).is_some() {
@@ -20,6 +21,9 @@ fn get_tables() -> String {
 /// Connects to sqlite database and returns a pool.
 /// Sets it to Wal mode by default, which is better for concurrency.
 pub async fn init_db() -> Result<Pool, DBError> {
+    fs::create_dir_all(config!(data_directory))
+        .await
+        .map_err(|e| DBError::IOError(format!("Failed to create data data directory: {e}")))?;
     let mut data_path = PathBuf::from(config!(data_directory));
     data_path.push("auth.db");
     let pool = PoolBuilder::new()

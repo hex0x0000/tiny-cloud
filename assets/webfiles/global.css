@@ -1,3 +1,7 @@
+:root {
+	--main-color: #8f2fef;
+}
+
 html {
 	background-color: black;
 	margin: auto;

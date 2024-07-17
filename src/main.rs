@@ -73,6 +73,7 @@ async fn server(secret_key: Key, database: Pool) -> Result<(), String> {
                 }
             })
             .app_data(Data::clone(&database))
+            .service(web::redirect(utils::make_url(""), utils::make_url("/ui")))
             .service(
                 web::scope(&utils::make_url("/static"))
                     .route("/favicon.ico", web::get().to(webui::images::favicon))
@@ -142,7 +143,7 @@ async fn server(secret_key: Key, database: Pool) -> Result<(), String> {
     plugins::init();
 
     log::info!(
-        "Starting server on version {}...",
+        "Starting Tiny Cloud on version {}...",
         env!("CARGO_PKG_VERSION"),
     );
     server

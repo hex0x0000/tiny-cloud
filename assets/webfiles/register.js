@@ -1,51 +1,55 @@
 function setMsg(msg) {
-	var msg_elem = document.getElementById("msg");
-	msg_elem.style.color = "white";
-	msg_elem.innerHTML = msg;
+	$('msg').style.color = 'white';
+	$('msg').innerHTML = msg;
 }
 
 function setErrorMsg(msg) {
-	var error_msg = document.getElementById("msg");
-	error_msg.style.color = "red";
-	error_msg.innerHTML = msg;
+	$('msg').style.color = 'red';
+	$('msg').innerHTML = msg;
 }
 
-async function submit(form) {
+async function submit() {
+	var form = Object.fromEntries(new FormData($('register')));
+	if (form.password_rep != form.password) {
+		setErrorMsg('Passwords do not match.');
+		return;
+	}
+	delete form.password_rep;
+	$('btn').disabled = true;
 	let response = await fetch(prefix + 'api/auth/register', {
-		method: "POST",
-		mode: "same-origin",
-		cache: "no-cache",
-		credentials: "same-origin",
+		method: 'POST',
+		mode: 'same-origin',
+		cache: 'no-cache',
+		credentials: 'same-origin',
 		headers: {
-			"Content-Type": "application/json",
+			'Content-Type': 'application/json',
 		},
-		redirect: "follow",
-		referrerPolicy: "no-referrer",
-		body: JSON.stringify(Object.fromEntries(new FormData(form))),
+		redirect: 'follow',
+		referrerPolicy: 'no-referrer',
+		body: JSON.stringify(form),
 	});
-
 	if (response.status !== 200) {
 		let errInfo = await response.json();
 		console.log(errInfo);
-		if (errInfo.error == "AuthError") {
-			setErrorMsg("Authentication Error:<br>" + errInfo.msg);
-		} else if (errInfo.error == "TokenError") {
-			setErrorMsg("Token Error:<br>" + errInfo.msg);
+		if (errInfo.error == 'AuthError') {
+			setErrorMsg('Authentication Error:<br>' + errInfo.msg);
+		} else if (errInfo.error == 'TokenError') {
+			setErrorMsg('Token Error:<br>' + errInfo.msg);
 		} else {
-			setErrorMsg("Unknown error... check logs if this persists");
+			setErrorMsg('Unknown error... check logs if this persists');
 		}
 	} else {
 		window.location.reload();
 	}
+	$('btn').disabled = false;
 }
 
 window.onload = function() {
-	var register = document.getElementById('register');
-	register.onsubmit = function(event) {
-		event.preventDefault();
+	$('register').onsubmit = function(e) {
+		e.preventDefault();
 		try {
-			setMsg("Registering...");
-			submit(register);
+			setMsg('Registering...');
+			submit();
 		} catch (error) {
 			setErrorMsg('A JS error occurred, check logs for more info and open an issue if this persists');
 			console.log(error);
