@@ -1,11 +1,31 @@
+// This file is part of the Tiny Cloud project.
+// You can find the source code of every repository here:
+//		https://github.com/personal-tiny-cloud
+//
+// Copyright (C) 2024  hex0x0000
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// 
+// Email: hex0x0000@protonmail.com
+
 use serde::{Deserialize, Serialize};
 use std::env::current_exe;
-use std::path::Path;
+use tcloud_library::toml;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::OnceCell;
 
-pub const ERR_MSG: &str = "Tried to access config while it wasn't opened yet. This is a bug";
 pub static CONFIG: OnceCell<Config> = OnceCell::const_new();
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -39,41 +59,51 @@ pub struct Logging {
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct CredentialSize {
+    pub max_username: u8,
+    pub min_username: u8,
+    pub max_passwd: u16,
+    pub min_passwd: u16,
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct Durations {
+    pub cookie_minutes: u32,
+    pub login_minutes: Option<u64>,
+    pub visit_minutes: Option<u64>,
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub server_name: String,
     pub description: String,
     pub url_prefix: String,
     pub server: Server,
+    pub max_file_upload_size: usize,
     pub logging: Logging,
     #[cfg(not(feature = "no-tls"))]
-    pub tls: Tls,
+    pub tls: Option<Tls>,
     pub registration: Option<Registration>,
     pub data_directory: String,
-    pub cookie_duration_minutes: u32,
-    pub login_deadline_minutes: Option<u64>,
-    pub visit_deadline_minutes: Option<u64>,
     pub session_secret_key_path: String,
-    pub max_username_size: u8,
-    pub min_username_size: u8,
-    pub max_passwd_size: u16,
-    pub min_passwd_size: u16,
+    pub duration: Durations,
+    pub cred_size: CredentialSize,
+    pub plugins: toml::Table,
 }
 
 fn get_exec_dir() -> Result<String, String> {
     let mut path = current_exe().map_err(|e| format!("Failed to get executable's path: {}", e))?;
     path.pop();
-    Ok(path
-        .to_str()
-        .ok_or("Failed to get executable's path")?
-        .into())
+    Ok(path.to_str().ok_or("Failed to get executable's path")?.into())
 }
 
 impl Config {
-    pub fn default() -> Result<Self, String> {
+    pub fn default(plugins: toml::Table) -> Result<Self, String> {
         Ok(Self {
             description: env!("CARGO_PKG_DESCRIPTION").to_string(),
             server_name: "Tiny Cloud".into(),
             url_prefix: "tcloud".into(),
+            max_file_upload_size: 5_000_000_000, // 5 GiB
             server: Server {
                 host: "127.0.0.1".into(),
                 port: 80,
@@ -91,34 +121,37 @@ impl Config {
                 }
                 #[cfg(not(feature = "normal-log"))]
                 {
-                    Logging {
-                        log_level: "warn".into(),
-                    }
+                    Logging { log_level: "warn".into() }
                 }
             },
-            #[cfg(any(feature = "rustls", feature = "openssl", feature = "openssl-bundled"))]
-            tls: Tls {
+            #[cfg(any(feature = "rustls", feature = "openssl"))]
+            tls: Some(Tls {
                 privkey_path: format!("{}/privkey.pem", get_exec_dir()?),
                 cert_path: format!("{}/cert.pem", get_exec_dir()?),
-            },
+            }),
             registration: Some(Registration {
                 token_size: 16,
                 token_duration_seconds: 24 * 60 * 60,
             }),
             data_directory: format!("{}/data", get_exec_dir()?),
-            cookie_duration_minutes: 43200,
-            login_deadline_minutes: Some(43200),
-            visit_deadline_minutes: Some(21600),
+            duration: Durations {
+                cookie_minutes: 43200,
+                login_minutes: Some(43200),
+                visit_minutes: Some(21600),
+            },
             session_secret_key_path: format!("{}/secret.key", get_exec_dir()?),
-            max_username_size: 10,
-            min_username_size: 3,
-            max_passwd_size: 256,
-            min_passwd_size: 9,
+            cred_size: CredentialSize {
+                max_username: 10,
+                min_username: 3,
+                max_passwd: 256,
+                min_passwd: 9,
+            },
+            plugins,
         })
     }
 }
 
-pub async fn open<P: AsRef<Path> + std::fmt::Display>(path: P) -> Result<(), String> {
+pub async fn open(path: String) -> Result<(), String> {
     let mut file = File::open(&path)
         .await
         .map_err(|e| format!("Failed to open config file `{path}`: {e}"))?;
@@ -127,26 +160,26 @@ pub async fn open<P: AsRef<Path> + std::fmt::Display>(path: P) -> Result<(), Str
         .await
         .map_err(|e| format!("Failed to read config file `{path}`: {e}"))?;
     CONFIG
-        .set(
-            serde_yaml::from_str(&config)
-                .map_err(|e| format!("Failed to read config file `{path}`: {e}"))?,
-        )
+        .set(toml::from_str(&config).map_err(|e| format!("Failed to read config file `{path}`: {e}"))?)
         .expect("Config has already been opened. This is a bug");
     Ok(())
 }
 
-pub async fn write_default() -> Result<(), String> {
+pub async fn write_default(plugins: toml::Table) -> Result<(), String> {
     let mut path = current_exe().map_err(|e| format!("Failed to get executable's path: {e}"))?;
     path.pop();
-    path.push("default.yaml");
-    let mut file = File::create(path)
-        .await
-        .map_err(|e| format!("Failed to create config file: {e}"))?;
-    let default = Config::default()?;
-    let default =
-        serde_yaml::to_string(&default).map_err(|e| format!("Failed to serialize config: {e}"))?;
+    path.push("default.toml");
+    let mut file = File::create(path).await.map_err(|e| format!("Failed to create config file: {e}"))?;
+    let default = Config::default(plugins)?;
+    let default = toml::to_string(&default).map_err(|e| format!("Failed to serialize config: {e}"))?;
     file.write_all(default.as_bytes())
         .await
         .map_err(|e| format!("Failed to write config: {e}"))?;
     Ok(())
+}
+
+pub fn get() -> &'static Config {
+    CONFIG
+        .get()
+        .expect("Tried to access config while it wasn't opened yet. This is a bug")
 }

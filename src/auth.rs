@@ -1,3 +1,24 @@
+// This file is part of the Tiny Cloud project.
+// You can find the source code of every repository here:
+//		https://github.com/personal-tiny-cloud
+//
+// Copyright (C) 2024  hex0x0000
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// 
+// Email: hex0x0000@protonmail.com
+
 pub mod cli;
 pub mod error;
 mod hash;
@@ -6,11 +27,11 @@ mod totp;
 
 use crate::config;
 use crate::database;
-use crate::error::ErrToResponse;
 use crate::token::check_token;
 use async_sqlite::Pool;
 use database::auth;
 use error::AuthError;
+use tcloud_library::error::ErrToResponse;
 #[cfg(feature = "totp-auth")]
 use totp_rs::TOTP;
 use zeroize::Zeroizing;
@@ -18,10 +39,10 @@ use zeroize::Zeroizing;
 fn check_validity(username: &str, password: &[u8]) -> Result<(), AuthError> {
     let user_len = username.len();
     let passwd_len = password.len();
-    let max_username_size = *config!(max_username_size) as usize;
-    let min_username_size = *config!(min_username_size) as usize;
-    let max_passwd_size = *config!(max_passwd_size) as usize;
-    let min_passwd_size = *config!(min_passwd_size) as usize;
+    let max_username_size = *config!(cred_size.max_username) as usize;
+    let min_username_size = *config!(cred_size.min_username) as usize;
+    let max_passwd_size = *config!(cred_size.max_passwd) as usize;
+    let min_passwd_size = *config!(cred_size.min_passwd) as usize;
     if user_len > max_username_size || user_len < min_username_size {
         return Err(AuthError::BadCredentials(format!(
             "Accepted username size is between {min_username_size} and {max_username_size} characters",
@@ -34,9 +55,7 @@ fn check_validity(username: &str, password: &[u8]) -> Result<(), AuthError> {
     }
     for c in username.chars() {
         if !c.is_alphanumeric() {
-            return Err(AuthError::BadCredentials(
-                "Username must be alphanumerical".into(),
-            ));
+            return Err(AuthError::BadCredentials("Username must be alphanumerical".into()));
         }
     }
     Ok(())
@@ -44,17 +63,10 @@ fn check_validity(username: &str, password: &[u8]) -> Result<(), AuthError> {
 
 /// Checks a user's password
 #[cfg(not(feature = "totp-auth"))]
-pub async fn check(
-    pool: &Pool,
-    username: &String,
-    password: Zeroizing<Vec<u8>>,
-) -> Result<(), AuthError> {
+pub async fn check(pool: &Pool, username: &String, password: Zeroizing<Vec<u8>>) -> Result<(), AuthError> {
     check_validity(username, &password)?;
     let dummy_hash = hash::create(password.clone()).await?;
-    match auth::get_user(pool, username.clone())
-        .await
-        .map_err(|e| e.into())?
-    {
+    match auth::get_auth(pool, username.clone()).await.map_err(|e| e.into())? {
         Some(user) => hash::verify(password, user.pass_hash).await,
         None => {
             // Dummy verification to keep the same response timings when the user is not found.
@@ -67,18 +79,10 @@ pub async fn check(
 
 /// Checks a user's password and validates the TOTP token
 #[cfg(feature = "totp-auth")]
-pub async fn check(
-    pool: &Pool,
-    username: &String,
-    password: Zeroizing<Vec<u8>>,
-    totp_token: String,
-) -> Result<(), AuthError> {
+pub async fn check(pool: &Pool, username: &String, password: Zeroizing<Vec<u8>>, totp_token: String) -> Result<(), AuthError> {
     check_validity(username, &password)?;
     let dummy_hash = hash::create(password.clone()).await?;
-    match auth::get_user(pool, username.clone())
-        .await
-        .map_err(|e| e.into())?
-    {
+    match auth::get_auth(pool, username.clone()).await.map_err(|e| e.into())? {
         Some(user) => {
             hash::verify(password, user.pass_hash).await?;
             self::totp::check(user.totp, totp_token)
@@ -94,17 +98,10 @@ pub async fn check(
 
 /// Adds a new user. Fails if username already exists
 #[cfg(not(feature = "totp-auth"))]
-pub async fn add_user(
-    pool: &Pool,
-    username: String,
-    password: Zeroizing<Vec<u8>>,
-    is_admin: bool,
-) -> Result<(), AuthError> {
+pub async fn add_user(pool: &Pool, username: String, password: Zeroizing<Vec<u8>>, is_admin: bool) -> Result<(), AuthError> {
     check_validity(&username, &password)?;
     let passwd_hash = hash::create(password).await?;
-    auth::add_user(pool, username, passwd_hash, is_admin)
-        .await
-        .map_err(|e| e.into())?;
+    auth::add_user(pool, username, passwd_hash, is_admin).await.map_err(|e| e.into())?;
     Ok(())
 }
 
@@ -118,12 +115,8 @@ pub async fn register_user(
     token: String,
 ) -> Result<(), Box<dyn ErrToResponse>> {
     check_validity(&username, &password).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
-    check_token(pool, token)
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
-    let passwd_hash = hash::create(password)
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    check_token(pool, token).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    let passwd_hash = hash::create(password).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
     auth::add_user(pool, username, passwd_hash, false)
         .await
         .map_err(|e| Box::new(Into::<AuthError>::into(e)) as Box<dyn ErrToResponse>)?;
@@ -132,12 +125,7 @@ pub async fn register_user(
 
 /// Adds a new user and returns its TOTP. Fails if username already exists
 #[cfg(feature = "totp-auth")]
-pub async fn add_user(
-    pool: &Pool,
-    username: String,
-    password: Zeroizing<Vec<u8>>,
-    is_admin: bool,
-) -> Result<TOTP, AuthError> {
+pub async fn add_user(pool: &Pool, username: String, password: Zeroizing<Vec<u8>>, is_admin: bool) -> Result<TOTP, AuthError> {
     check_validity(&username, &password)?;
     let passwd_hash = hash::create(password).await?;
     let totp = self::totp::gen(username.clone())?;
@@ -157,14 +145,9 @@ pub async fn register_user(
     token: String,
 ) -> Result<TOTP, Box<dyn ErrToResponse>> {
     check_validity(&username, &password).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
-    check_token(pool, token)
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
-    let passwd_hash = hash::create(password)
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
-    let totp =
-        self::totp::gen(username.clone()).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    check_token(pool, token).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    let passwd_hash = hash::create(password).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    let totp = self::totp::gen(username.clone()).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
     auth::add_user(pool, username, passwd_hash, totp.get_url(), false)
         .await
         .map_err(|e| Box::new(Into::<AuthError>::into(e)) as Box<dyn ErrToResponse>)?;
@@ -172,8 +155,6 @@ pub async fn register_user(
 }
 
 pub async fn delete_user(pool: &Pool, username: String) -> Result<(), AuthError> {
-    auth::delete_user(&pool, username)
-        .await
-        .map_err(|e| e.into())?;
+    auth::delete_user(&pool, username).await.map_err(|e| e.into())?;
     Ok(())
 }

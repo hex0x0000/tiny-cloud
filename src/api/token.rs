@@ -1,14 +1,34 @@
+// This file is part of the Tiny Cloud project.
+// You can find the source code of every repository here:
+//		https://github.com/personal-tiny-cloud
+//
+// Copyright (C) 2024  hex0x0000
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// 
+// Email: hex0x0000@protonmail.com
+
 use crate::config;
-use crate::database::{self, auth};
-use crate::error::ErrToResponse;
+use crate::database;
 use crate::token::{self, error::TokenError};
 use actix_identity::error::GetIdentityError;
 use actix_identity::Identity;
 use actix_web::{get, post, web, HttpResponse, Responder};
 use async_sqlite::Pool;
 use serde::Deserialize;
-use serde_json::json;
-use serde_json::Value;
+use tcloud_library::error::ErrToResponse;
+use tcloud_library::serde_json::{json, Value};
 
 /// New token duration
 #[derive(Deserialize)]
@@ -23,11 +43,11 @@ struct TokenInfo {
 }
 
 async fn check_admin(pool: &Pool, username: String) -> Result<(), HttpResponse> {
-    if let Some(user) = auth::get_user(pool, username)
+    if let Some(is_admin) = database::auth::is_admin(pool, username)
         .await
         .map_err(|e| Into::<TokenError>::into(e).to_response())?
     {
-        if user.is_admin {
+        if is_admin {
             Ok(())
         } else {
             Err(HttpResponse::Forbidden().body(""))
@@ -39,11 +59,7 @@ async fn check_admin(pool: &Pool, username: String) -> Result<(), HttpResponse> 
 
 /// Creates a new token
 #[post("/new")]
-pub async fn new(
-    user: Identity,
-    pool: web::Data<Pool>,
-    info: web::Json<NewToken>,
-) -> impl Responder {
+pub async fn new(user: Identity, pool: web::Data<Pool>, info: web::Json<NewToken>) -> impl Responder {
     if let Some(registration) = config!(registration) {
         let pool = pool.into_inner();
         let username = get_user!(user.id());
@@ -62,11 +78,7 @@ pub async fn new(
 }
 
 #[post("/delete")]
-pub async fn delete(
-    user: Identity,
-    pool: web::Data<Pool>,
-    token: web::Json<TokenInfo>,
-) -> impl Responder {
+pub async fn delete(user: Identity, pool: web::Data<Pool>, token: web::Json<TokenInfo>) -> impl Responder {
     if config!(registration).is_some() {
         let username = get_user!(user.id());
         let pool = pool.into_inner();

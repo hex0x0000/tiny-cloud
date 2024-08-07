@@ -1,4 +1,26 @@
-use crate::error::ErrToResponse;
+// This file is part of the Tiny Cloud project.
+// You can find the source code of every repository here:
+//		https://github.com/personal-tiny-cloud
+//
+// Copyright (C) 2024  hex0x0000
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// 
+// Email: hex0x0000@protonmail.com
+
+use actix_web::{HttpResponse, HttpResponseBuilder};
+use tcloud_library::error::ErrToResponse;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -36,14 +58,14 @@ impl ErrToResponse for AuthError {
         self.to_string()
     }
 
-    fn http_code(&self) -> u16 {
+    fn http_code(&self) -> HttpResponseBuilder {
         match self {
-            Self::BadCredentials(_) => 400,
-            Self::InvalidCredentials => 401,
-            Self::InvalidRegCredentials => 401,
+            Self::BadCredentials(_) => HttpResponse::BadRequest(),
+            Self::InvalidCredentials => HttpResponse::Unauthorized(),
+            Self::InvalidRegCredentials => HttpResponse::Unauthorized(),
             #[cfg(feature = "totp-auth")]
-            Self::InvalidTOTP => 401,
-            Self::InternalError(_) => 500,
+            Self::InvalidTOTP => HttpResponse::Unauthorized(),
+            Self::InternalError(_) => HttpResponse::InternalServerError(),
         }
     }
 

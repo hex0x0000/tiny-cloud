@@ -23,26 +23,20 @@ use actix_web::{HttpResponse, HttpResponseBuilder};
 use tcloud_library::error::ErrToResponse;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
-pub enum TokenError {
-    #[error("An internal server error occurred")]
+#[derive(Debug, Error)]
+pub enum PluginError {
+    #[error("An internal server error occurred.")]
     InternalError(String),
-    #[error("Token was not found")]
-    NotFound,
-    #[error("Token expired")]
-    Expired,
 }
 
-impl ErrToResponse for TokenError {
+impl ErrToResponse for PluginError {
     fn error(&self) -> &'static str {
-        "TokenError"
+        "PluginError"
     }
 
     fn err_type(&self) -> &'static str {
         match self {
             Self::InternalError(_) => stringify!(InternalError),
-            Self::NotFound => stringify!(NotFound),
-            Self::Expired => stringify!(Expired),
         }
     }
 
@@ -53,14 +47,11 @@ impl ErrToResponse for TokenError {
     fn http_code(&self) -> HttpResponseBuilder {
         match self {
             Self::InternalError(_) => HttpResponse::InternalServerError(),
-            Self::NotFound => HttpResponse::NotFound(),
-            Self::Expired => HttpResponse::Gone(),
         }
     }
 
     fn handle(&self) {
-        if let Self::InternalError(err) = self {
-            log::error!("An internal server error occurred while handling token: {err}");
-        }
+        let Self::InternalError(err) = self;
+        log::error!("An internal server error occurred during authentication: {err}");
     }
 }

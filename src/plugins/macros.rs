@@ -19,31 +19,16 @@
 // 
 // Email: hex0x0000@protonmail.com
 
-#[macro_use]
-mod macros;
-pub mod auth;
-pub mod plugins;
-pub mod token;
-use crate::config;
-use actix_web::{get, HttpResponse, Responder};
-use std::sync::OnceLock;
-use tcloud_library::serde_json::json;
-
-static INFO: OnceLock<String> = OnceLock::new();
-
-/// Returns server info
-#[get("/info")]
-pub async fn info() -> impl Responder {
-    HttpResponse::Ok().content_type("application/json").body(
-        INFO.get_or_init(|| {
-            json!({
-                "name": config!(server_name),
-                "version": env!("CARGO_PKG_VERSION"),
-                "description": config!(description),
-                "source": env!("CARGO_PKG_REPOSITORY")
-            })
-            .to_string()
-        })
-        .to_owned(),
-    )
+/// Returns a new plugin instance.
+/// Requires the feature's name and the plugin's specific type.
+/// The plugin must implement a `new() -> Self` function.
+#[macro_export]
+macro_rules! plugin {
+    ($feature:literal, $plugin:ty) => {
+        #[cfg(feature = $feature)]
+        {
+            let plugin = <$plugin>::new();
+            (plugin.name().into(), Box::new(plugin) as Box<dyn Plugin>)
+        }
+    };
 }

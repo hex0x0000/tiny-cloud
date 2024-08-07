@@ -1,3 +1,24 @@
+// This file is part of the Tiny Cloud project.
+// You can find the source code of every repository here:
+//		https://github.com/personal-tiny-cloud
+//
+// Copyright (C) 2024  hex0x0000
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// 
+// Email: hex0x0000@protonmail.com
+
 use super::{
     error::DBError,
     utils::{calc_expire, now},
@@ -8,6 +29,7 @@ use async_sqlite::{
     Pool,
 };
 use rand::{distributions::Alphanumeric, Rng};
+use sql_minifier::macros::minify_sql;
 use std::time::Duration;
 
 #[non_exhaustive]
@@ -17,24 +39,22 @@ pub struct Token {
     pub expire_date: i64,
 }
 
-pub const TOKEN_TABLE: &str = "
+pub const TOKEN_TABLE: &str = minify_sql!(
+    "
 CREATE TABLE IF NOT EXISTS tokens (
     id          INTEGER PRIMARY KEY,
     token       TEXT    NOT NULL,
     expire_date INTEGER NOT NULL,
     UNIQUE(token)
-);";
+)"
+);
 
-const INSERT_TOKEN: &str = "INSERT INTO tokens (token, expire_date) VALUES (:token, :expire_date)";
+const INSERT_TOKEN: &str = minify_sql!("INSERT INTO tokens (token, expire_date) VALUES (:token, :expire_date)");
 
 /// Creates a token and adds it to the database
 /// Optionally takes an `duration_secs` param which specifies the duration, if none
 /// is given then the config's token_duration_seconds is used
-pub async fn create_token(
-    pool: &Pool,
-    registration: &Registration,
-    duration_secs: Option<u64>,
-) -> Result<(String, u64), DBError> {
+pub async fn create_token(pool: &Pool, registration: &Registration, duration_secs: Option<u64>) -> Result<(String, u64), DBError> {
     let token: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
         .take(registration.token_size.into())

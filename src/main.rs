@@ -1,10 +1,31 @@
+// This file is part of the Tiny Cloud project.
+// You can find the source code of every repository here:
+//		https://github.com/personal-tiny-cloud
+//
+// Copyright (C) 2024  hex0x0000
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// 
+// Email: hex0x0000@protonmail.com
+
 mod api;
 mod auth;
 mod config;
 mod database;
-mod error;
 mod logging;
 mod plugins;
+mod server;
 #[cfg(not(feature = "no-tls"))]
 mod tls;
 mod token;
@@ -12,165 +33,70 @@ mod utils;
 mod webui;
 #[macro_use]
 mod macros;
-use actix_identity::IdentityMiddleware;
-use actix_session::{config::PersistentSession, storage::CookieSessionStore, SessionMiddleware};
-use actix_web::{
-    cookie::{time::Duration, Key, SameSite},
-    middleware,
-    web::{self, Data},
-    App, HttpServer,
-};
-use async_sqlite::Pool;
-use clap::Parser;
+use actix_web::cookie::Key;
+use plugins::Plugins;
+use tcloud_library::tiny_args::*;
 use tokio::fs;
 use zeroize::Zeroizing;
 
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-struct Args {
-    /// Path to the configuration file
-    #[clap(short, long, value_parser, default_value = "config.yaml")]
-    config: String,
-    /// Writes the default configuration to default.yaml and exits
-    #[clap(long = "write-default")]
-    write_default: bool,
-    /// Creates a new user and exits
-    #[clap(long = "create-user")]
-    create_user: bool,
-}
+#[actix_web::main]
+async fn main() {
+    let mut plugins = Plugins::new();
 
-async fn server(secret_key: Key, database: Pool) -> Result<(), String> {
-    let database = Data::new(database);
-    let server = HttpServer::new(move || {
-        App::new()
-            .wrap(middleware::Logger::default())
-            .wrap(middleware::NormalizePath::trim())
-            .wrap(
-                IdentityMiddleware::builder()
-                    .login_deadline(
-                        config!(login_deadline_minutes)
-                            .map(|d| std::time::Duration::from_secs(d * 60)),
-                    )
-                    .visit_deadline(
-                        config!(visit_deadline_minutes)
-                            .map(|d| std::time::Duration::from_secs(d * 60)),
-                    )
-                    .build(),
-            )
-            .wrap({
-                let session_middleware =
-                    SessionMiddleware::builder(CookieSessionStore::default(), secret_key.clone())
-                        .cookie_name("auth".to_owned())
-                        .cookie_http_only(true)
-                        .cookie_same_site(SameSite::Strict)
-                        .session_lifecycle(PersistentSession::default().session_ttl(
-                            Duration::minutes((*config!(cookie_duration_minutes)).into()),
-                        ));
-                if cfg!(not(feature = "no-tls")) {
-                    session_middleware.build()
-                } else {
-                    session_middleware.cookie_secure(false).build()
-                }
-            })
-            .app_data(Data::clone(&database))
-            .service(web::redirect(utils::make_url(""), utils::make_url("/ui")))
-            .service(
-                web::scope(&utils::make_url("/static"))
-                    .route("/favicon.ico", web::get().to(webui::images::favicon))
-                    .route("/logo.png", web::get().to(webui::images::logo)),
-            )
-            .service(
-                web::scope(&utils::make_url("/ui"))
-                    .service(webui::root)
-                    .service(webui::register_page)
-                    .service(webui::login_page),
-            )
-            .service(
-                web::scope(&utils::make_url("/api"))
-                    .service(api::info)
-                    .route("/app/{name}", web::get().to(api::plugins::handler))
-                    .route("/app/{name}", web::post().to(api::plugins::handler))
-                    .route("/app/{name}", web::put().to(api::plugins::handler))
-                    .route("/app/{name}", web::delete().to(api::plugins::handler))
-                    .route("/app/{name}", web::patch().to(api::plugins::handler))
-                    .service(
-                        web::scope("/auth")
-                            .service(api::auth::login)
-                            .service(api::auth::register)
-                            .service(api::auth::logout)
-                            .service(api::auth::delete),
-                    )
-                    .service(
-                        web::scope("/token")
-                            .service(api::token::new)
-                            .service(api::token::delete)
-                            .service(api::token::list),
-                    ),
-            )
-    });
+    let mut cmd = Command::create("tiny-cloud", env!("CARGO_PKG_DESCRIPTION"))
+        .author(env!("CARGO_PKG_AUTHORS"))
+        .version(env!("CARGO_PKG_VERSION"))
+        .license(env!("CARGO_PKG_LICENSE"))
+        .arg(
+            arg! { -c, --config },
+            ArgType::String,
+            "Path to the configuration file (default: ./config.toml)",
+        )
+        .arg(arg! { --create-user }, ArgType::Flag, "Creates a new user and exits")
+        .arg(
+            arg! { --write-default },
+            ArgType::Flag,
+            "Writes the default configuration and exits",
+        )
+        .arg(arg! { -h, --help }, ArgType::Flag, "Shows this help and exits");
+    cmd = plugins.add_subcmds(cmd);
+    let cmd = cmd.build();
 
-    // Setting TLS
-    let server = {
-        let binding = format!("{}:{}", config!(server.host), config!(server.port));
-        #[cfg(feature = "openssl")]
-        {
-            log::info!("Binding to {binding} with TLS (openssl)");
-            server
-                .bind_openssl(binding, tls::get_openssl_config(config!(tls))?)
-                .map_err(|e| format!("Failed to bind server with TLS (openssl): {e}"))?
-        }
-
-        #[cfg(feature = "rustls")]
-        {
-            log::info!("Binding to {binding} with TLS (rustls)");
-            server
-                .bind_rustls_0_23(binding, tls::get_rustls_config(config!(tls))?)
-                .map_err(|e| format!("Failed to bind server with TLS (rustls): {e}"))?
-        }
-
-        #[cfg(feature = "no-tls")]
-        {
-            log::info!("Binding to {binding}");
-            log::warn!("TLS is disabled.");
-            log::warn!("This is recommended *ONLY* if you are running this server behind a reverse proxy (with TLS) or if you are running the server locally.");
-            log::warn!("Any other configuration is *UNSAFE* and may be subject to cyberattacks.");
-            server
-                .bind(binding)
-                .map_err(|e| format!("Failed to bind server: {e}"))?
+    let parsed = match cmd.parse() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{e}");
+            return;
         }
     };
 
-    plugins::init();
+    if plugins.handle_args(&parsed) {
+        return;
+    }
 
-    log::info!(
-        "Starting Tiny Cloud on version {}...",
-        env!("CARGO_PKG_VERSION"),
-    );
-    server
-        .workers(*config!(server.workers))
-        .run()
-        .await
-        .map_err(|e| format!("Error while running: {e}"))?;
-    Ok(())
-}
+    if parsed.args.get(arg!(--help)).is_some() {
+        println!("{}", parsed.help);
+        return;
+    }
 
-#[actix_web::main]
-async fn main() {
-    let args = Args::parse();
-
-    if args.write_default {
-        if let Err(e) = config::write_default().await {
-            eprintln!("{e}");
+    if parsed.args.get(arg! { --write-default }).is_some() {
+        if let Err(e) = config::write_default(plugins.default_configs()).await {
+            eprintln!("Failed to write default config: {e}");
         }
         return;
     }
 
-    if let Err(e) = config::open(args.config).await {
+    let config_path = match parsed.args.get(arg!(--config)) {
+        Some(path) => path.value().string(),
+        None => "./config.toml".into(),
+    };
+
+    if let Err(e) = config::open(config_path).await {
         eprintln!("{e}");
         return;
     }
 
-    if args.create_user {
+    if parsed.args.get(arg! { --create-user }).is_some() {
         if let Err(e) = auth::cli::create_user().await {
             eprintln!("Failed to create user: {e}");
         }
@@ -198,7 +124,7 @@ async fn main() {
     }
     let secret_key = Key::from(&secret_key[..64]);
 
-    let database = match database::init_db().await {
+    let database = match database::init().await {
         Ok(db) => db,
         Err(e) => {
             log::error!("Failed to open database: {e}");
@@ -206,7 +132,12 @@ async fn main() {
         }
     };
 
-    if let Err(e) = server(secret_key, database).await {
+    if let Err(e) = plugins.init(config!(plugins)) {
+        log::error!("Failed to initialize plugins: {e}");
+        return;
+    }
+
+    if let Err(e) = server::start(secret_key, database, plugins).await {
         log::error!("Server crashed: {e}");
     }
 }
