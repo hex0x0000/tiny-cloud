@@ -16,7 +16,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+//
 // Email: hex0x0000@protonmail.com
 
 pub mod cli;
@@ -25,6 +25,7 @@ mod hash;
 #[cfg(feature = "totp-auth")]
 mod totp;
 
+use crate::api::auth::Login;
 use crate::config;
 use crate::database;
 use crate::token::check_token;
@@ -63,11 +64,15 @@ fn check_validity(username: &str, password: &[u8]) -> Result<(), AuthError> {
 
 /// Checks a user's password
 #[cfg(not(feature = "totp-auth"))]
-pub async fn check(pool: &Pool, username: &String, password: Zeroizing<Vec<u8>>) -> Result<(), AuthError> {
-    check_validity(username, &password)?;
+pub async fn check(pool: &Pool, login: Login) -> Result<String, AuthError> {
+    let password = Zeroizing::new(login.password.into_bytes());
+    check_validity(&login.user, &password)?;
     let dummy_hash = hash::create(password.clone()).await?;
-    match auth::get_auth(pool, username.clone()).await.map_err(|e| e.into())? {
-        Some(user) => hash::verify(password, user.pass_hash).await,
+    match auth::get_auth(pool, login.user.clone()).await.map_err(|e| e.into())? {
+        Some(user) => {
+            hash::verify(password, user.pass_hash).await?;
+            Ok(login.user)
+        }
         None => {
             // Dummy verification to keep the same response timings when the user is not found.
             // Keeps malicious attackers from scanning the server for usernames
@@ -77,15 +82,18 @@ pub async fn check(pool: &Pool, username: &String, password: Zeroizing<Vec<u8>>)
     }
 }
 
-/// Checks a user's password and validates the TOTP token
+/// Checks a user's password and validates the TOTP token.
+/// Returns user's username on success.
 #[cfg(feature = "totp-auth")]
-pub async fn check(pool: &Pool, username: &String, password: Zeroizing<Vec<u8>>, totp_token: String) -> Result<(), AuthError> {
-    check_validity(username, &password)?;
+pub async fn check(pool: &Pool, login: Login) -> Result<String, AuthError> {
+    let password = Zeroizing::new(login.password.into_bytes());
+    check_validity(&login.user, &password)?;
     let dummy_hash = hash::create(password.clone()).await?;
-    match auth::get_auth(pool, username.clone()).await.map_err(|e| e.into())? {
+    match auth::get_auth(pool, login.user.clone()).await.map_err(|e| e.into())? {
         Some(user) => {
             hash::verify(password, user.pass_hash).await?;
-            self::totp::check(user.totp, totp_token)
+            self::totp::check(user.totp, login.totp)?;
+            Ok(login.user)
         }
         None => {
             // Dummy verification to keep the same response timings when the user is not found.

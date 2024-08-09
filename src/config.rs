@@ -16,7 +16,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+//
 // Email: hex0x0000@protonmail.com
 
 use serde::{Deserialize, Serialize};
@@ -74,18 +74,24 @@ pub struct Durations {
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct Limits {
+    pub file_upload_size: usize,
+    pub payload_size: usize,
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub server_name: String,
     pub description: String,
     pub url_prefix: String,
     pub server: Server,
-    pub max_file_upload_size: usize,
     pub logging: Logging,
     #[cfg(not(feature = "no-tls"))]
     pub tls: Option<Tls>,
     pub registration: Option<Registration>,
     pub data_directory: String,
     pub session_secret_key_path: String,
+    pub limits: Limits,
     pub duration: Durations,
     pub cred_size: CredentialSize,
     pub plugins: toml::Table,
@@ -103,7 +109,6 @@ impl Config {
             description: env!("CARGO_PKG_DESCRIPTION").to_string(),
             server_name: "Tiny Cloud".into(),
             url_prefix: "tcloud".into(),
-            max_file_upload_size: 5_000_000_000, // 5 GiB
             server: Server {
                 host: "127.0.0.1".into(),
                 port: 80,
@@ -134,6 +139,10 @@ impl Config {
                 token_duration_seconds: 24 * 60 * 60,
             }),
             data_directory: format!("{}/data", get_exec_dir()?),
+            limits: Limits {
+                file_upload_size: 5_000_000_000,
+                payload_size: 4096,
+            },
             duration: Durations {
                 cookie_minutes: 43200,
                 login_minutes: Some(43200),

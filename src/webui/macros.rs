@@ -1,4 +1,3 @@
-
 // This file is part of the Tiny Cloud project.
 // You can find the source code of every repository here:
 //		https://github.com/personal-tiny-cloud
@@ -17,7 +16,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+//
 // Email: hex0x0000@protonmail.com
 
 /// Gets an image from assets

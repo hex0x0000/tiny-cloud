@@ -16,13 +16,14 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+//
 // Email: hex0x0000@protonmail.com
 
 mod api;
 mod auth;
 mod config;
 mod database;
+mod error;
 mod logging;
 mod plugins;
 mod server;

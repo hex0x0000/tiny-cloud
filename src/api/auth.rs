@@ -16,7 +16,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+//
 // Email: hex0x0000@protonmail.com
 
 use crate::{
@@ -33,12 +33,13 @@ use tcloud_library::error::ErrToResponse;
 use zeroize::Zeroizing;
 
 /// Username and password sent by the client to login.
+#[non_exhaustive]
 #[derive(Deserialize)]
 pub struct Login {
-    user: String,
-    password: String,
+    pub user: String,
+    pub password: String,
     #[cfg(feature = "totp-auth")]
-    totp: String,
+    pub totp: String,
 }
 
 /// Username, password and token sent by the client to register
@@ -134,44 +135,20 @@ pub async fn register(
 }
 
 /// Logins and starts a new session
-#[cfg(not(feature = "totp-auth"))]
 #[post("/login")]
 pub async fn login(req: HttpRequest, conn: ConnectionInfo, login: web::Json<Login>, pool: web::Data<Pool>) -> impl Responder {
     let login = login.into_inner();
     let pool = pool.into_inner();
-    let password = Zeroizing::new(login.password.into_bytes());
-    match auth::check(&pool, &login.user, password).await {
-        Ok(_) => {
-            if let Err(err) = Identity::login(&req.extensions(), login.user.clone()) {
+    match auth::check(&pool, login).await {
+        Ok(user) => {
+            log::warn!("client [{}] logged in as `{}`", get_ip(&conn), sanitize_user(&user));
+            if let Err(err) = Identity::login(&req.extensions(), user) {
                 return AuthError::InternalError(format!("Failed to build identity during registration: {err}")).to_response();
             }
-            log::warn!("client [{}] logged in as `{}`", get_ip(&conn), sanitize_user(&login.user));
             HttpResponse::Ok().body("")
         }
         Err(err) => {
-            log::warn!("client [{}] tried to login as `{}`", get_ip(&conn), sanitize_user(&login.user));
-            err.to_response()
-        }
-    }
-}
-
-/// Logins and starts a new session
-#[cfg(feature = "totp-auth")]
-#[post("/login")]
-pub async fn login(req: HttpRequest, conn: ConnectionInfo, login: web::Json<Login>, pool: web::Data<Pool>) -> impl Responder {
-    let login = login.into_inner();
-    let pool = pool.into_inner();
-    let password = Zeroizing::new(login.password.into_bytes());
-    match auth::check(&pool, &login.user, password, login.totp).await {
-        Ok(_) => {
-            if let Err(err) = Identity::login(&req.extensions(), login.user.clone()) {
-                return AuthError::InternalError(format!("Failed to build identity during registration: {err}")).to_response();
-            }
-            log::warn!("client [{}] logged in as `{}`", get_ip(&conn), sanitize_user(&login.user));
-            HttpResponse::Ok().body("")
-        }
-        Err(err) => {
-            log::warn!("client [{}] tried to login as `{}`", get_ip(&conn), sanitize_user(&login.user));
+            log::warn!("client [{}] failed to login", get_ip(&conn));
             err.to_response()
         }
     }

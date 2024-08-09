@@ -23,26 +23,26 @@ use actix_web::{HttpResponse, HttpResponseBuilder};
 use tcloud_library::error::ErrToResponse;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
-pub enum TokenError {
-    #[error("An internal server error occurred")]
-    InternalError(String),
-    #[error("Token was not found")]
-    NotFound,
-    #[error("Token expired")]
-    Expired,
+#[derive(Debug, Error)]
+pub enum RequestError {
+    #[error("Invalid JSON request: {0}")]
+    JsonError(String),
+    #[error("Invalid URL query: {0}")]
+    QueryError(String),
+    #[error("Invalid Multipart request: {0}")]
+    MultipartError(String),
 }
 
-impl ErrToResponse for TokenError {
+impl ErrToResponse for RequestError {
     fn error(&self) -> &'static str {
-        "TokenError"
+        "RequestError"
     }
 
     fn err_type(&self) -> &'static str {
-        match self {
-            Self::InternalError(_) => stringify!(InternalError),
-            Self::NotFound => stringify!(NotFound),
-            Self::Expired => stringify!(Expired),
+        match &self {
+            Self::JsonError(_) => stringify!(JsonError),
+            Self::QueryError(_) => stringify!(QueryError),
+            Self::MultipartError(_) => stringify!(MultipartError),
         }
     }
 
@@ -51,16 +51,10 @@ impl ErrToResponse for TokenError {
     }
 
     fn http_code(&self) -> HttpResponseBuilder {
-        match self {
-            Self::InternalError(_) => HttpResponse::InternalServerError(),
-            Self::NotFound => HttpResponse::NotFound(),
-            Self::Expired => HttpResponse::Gone(),
-        }
+        HttpResponse::BadRequest()
     }
 
     fn handle(&self) {
-        if let Self::InternalError(err) = self {
-            log::error!("An internal server error occurred while handling token: {err}");
-        }
+        log::debug!("Invalid request from client: {}", self);
     }
 }

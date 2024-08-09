@@ -10,7 +10,7 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.29", features = [ "sync", "fs", "parking_lot" ] }
 actix-web = { version = "4", features = [ "secure-cookies" ] }
-actix-session = { version = "0.9", features = [ "cookie-session" ] }
+actix-session = { version = "0.9", features = [ "cookie-session" ] } # 0.10 does not work for some reason, waiting for updates
 actix-identity = "0.7"
 actix-multipart = { version = "0.7", features = [ "tempfile" ] }
 sql_minifier = "0.1.5"

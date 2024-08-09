@@ -16,20 +16,21 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// 
+//
 // Email: hex0x0000@protonmail.com
 
-use crate::{api, config, plugins::Plugins, utils, webui};
+use crate::{api, config, error::RequestError, plugins::Plugins, utils, webui};
 use actix_identity::IdentityMiddleware;
 use actix_multipart::form::MultipartFormConfig;
 use actix_session::{config::PersistentSession, storage::CookieSessionStore, SessionMiddleware};
 use actix_web::{
     cookie::{time::Duration, Key, SameSite},
-    middleware,
+    error, middleware,
     web::{self, Data},
     App, HttpServer,
 };
 use async_sqlite::Pool;
+use tcloud_library::error::ErrToResponse;
 
 fn warn_msg(binding: &str) {
     log::info!("Binding to {binding}");
@@ -46,6 +47,29 @@ pub async fn start(secret_key: Key, database: Pool, plugins: Plugins) -> Result<
             .wrap(middleware::Logger::default())
             .wrap(middleware::NormalizePath::trim())
             .wrap(middleware::Compress::default())
+            .app_data(Data::clone(&database))
+            .app_data(Data::clone(&plugins))
+            .app_data(
+                web::JsonConfig::default()
+                    .limit(*config!(limits.payload_size))
+                    .error_handler(|err, _| {
+                        let err_msg = err.to_string();
+                        error::InternalError::from_response(err, RequestError::JsonError(err_msg).to_response()).into()
+                    }),
+            )
+            .app_data(
+                MultipartFormConfig::default()
+                    .total_limit(*config!(limits.file_upload_size))
+                    .memory_limit(*config!(limits.payload_size))
+                    .error_handler(|err, _| {
+                        let err_msg = err.to_string();
+                        error::InternalError::from_response(err, RequestError::MultipartError(err_msg).to_response()).into()
+                    }),
+            )
+            .app_data(web::QueryConfig::default().error_handler(|err, _| {
+                let err_msg = err.to_string();
+                error::InternalError::from_response(err, RequestError::QueryError(err_msg).to_response()).into()
+            }))
             .wrap(
                 IdentityMiddleware::builder()
                     .login_deadline(config!(duration.login_minutes).map(|d| std::time::Duration::from_secs(d * 60)))
@@ -60,15 +84,15 @@ pub async fn start(secret_key: Key, database: Pool, plugins: Plugins) -> Result<
                     .session_lifecycle(
                         PersistentSession::default().session_ttl(Duration::minutes((*config!(duration.cookie_minutes)).into())),
                     );
-                if cfg!(not(feature = "no-tls")) {
-                    session_middleware.build()
-                } else {
+                #[cfg(feature = "no-tls")]
+                {
                     session_middleware.cookie_secure(false).build()
                 }
+                #[cfg(not(feature = "no-tls"))]
+                {
+                    session_middleware.cookie_secure(config!(tls).is_some()).build()
+                }
             })
-            .app_data(Data::clone(&database))
-            .app_data(Data::clone(&plugins))
-            .app_data(MultipartFormConfig::default().total_limit(*config!(max_file_upload_size)))
             .service(web::redirect(utils::make_url(""), utils::make_url("/ui")))
             .service(
                 web::scope(&utils::make_url("/static"))
