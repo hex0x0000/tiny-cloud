@@ -163,6 +163,6 @@ pub async fn register_user(
 }
 
 pub async fn delete_user(pool: &Pool, username: String) -> Result<(), AuthError> {
-    auth::delete_user(&pool, username).await.map_err(|e| e.into())?;
+    auth::delete_user(pool, username).await.map_err(|e| e.into())?;
     Ok(())
 }

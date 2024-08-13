@@ -40,7 +40,7 @@ pub struct FileForm {
 async fn is_admin(pool: &Pool, username: &str) -> Result<bool, PluginError> {
     if let Some(is_admin) = database::auth::is_admin(pool, username.to_string())
         .await
-        .map_err(|e| Into::<PluginError>::into(e))?
+        .map_err(Into::<PluginError>::into)?
     {
         Ok(is_admin)
     } else {

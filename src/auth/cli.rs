@@ -141,7 +141,7 @@ pub async fn create_user() -> Result<(), String> {
         path.push(format!("{user}-totp-qr.png"));
         let mut qr_file = File::options()
             .write(true)
-            .create(true)
+            .create_new(true)
             .open(path)
             .map_err(|e| format!("Failed to open file for the QR code image: {e}"))?;
         qr_file

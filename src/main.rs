@@ -34,6 +34,8 @@ mod utils;
 mod webui;
 #[macro_use]
 mod macros;
+use std::process::ExitCode;
+
 use actix_web::cookie::Key;
 use plugins::Plugins;
 use tcloud_library::tiny_args::*;
@@ -41,7 +43,17 @@ use tokio::fs;
 use zeroize::Zeroizing;
 
 #[actix_web::main]
-async fn main() {
+async fn main() -> ExitCode {
+    if let Err(e) = run().await {
+        log::error!("{e}");
+        eprintln!("{e}");
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+async fn run() -> Result<(), String> {
     let mut plugins = Plugins::new();
 
     let mut cmd = Command::create("tiny-cloud", env!("CARGO_PKG_DESCRIPTION"))
@@ -61,30 +73,22 @@ async fn main() {
         )
         .arg(arg! { -h, --help }, ArgType::Flag, "Shows this help and exits");
     cmd = plugins.add_subcmds(cmd);
-    let cmd = cmd.build();
-
-    let parsed = match cmd.parse() {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("{e}");
-            return;
-        }
-    };
+    let parsed = cmd.build().parse()?;
 
     if plugins.handle_args(&parsed) {
-        return;
+        return Ok(());
     }
 
-    if parsed.args.get(arg!(--help)).is_some() {
+    if parsed.args.contains(arg!(--help)) {
         println!("{}", parsed.help);
-        return;
+        return Ok(());
     }
 
-    if parsed.args.get(arg! { --write-default }).is_some() {
-        if let Err(e) = config::write_default(plugins.default_configs()).await {
-            eprintln!("Failed to write default config: {e}");
-        }
-        return;
+    if parsed.args.contains(arg! { --write-default }) {
+        config::write_default(plugins.default_configs())
+            .await
+            .map_err(|e| format!("Failed to write default config: {e}"))?;
+        return Ok(());
     }
 
     let config_path = match parsed.args.get(arg!(--config)) {
@@ -92,53 +96,49 @@ async fn main() {
         None => "./config.toml".into(),
     };
 
-    if let Err(e) = config::open(config_path).await {
-        eprintln!("{e}");
-        return;
+    config::open(config_path).await?;
+
+    if parsed.args.contains(arg! { --create-user }) {
+        auth::cli::create_user().await.map_err(|e| format!("Failed to create user: {e}"))?;
+        return Ok(());
     }
 
-    if parsed.args.get(arg! { --create-user }).is_some() {
-        if let Err(e) = auth::cli::create_user().await {
-            eprintln!("Failed to create user: {e}");
-        }
-        return;
-    }
+    #[cfg(feature = "default-log")]
+    let logger = tiny_logs::init(
+        logging::get_filter(config!(logging.log_level))?,
+        config!(logging.file).clone(),
+        config!(logging.file_level).clone().map(|f| logging::get_filter(&f)).transpose()?,
+    )
+    .await
+    .map_err(|e| format!("Failed to initialize logging: {e}"))?;
 
-    if let Err(e) = logging::init_logging() {
-        eprintln!("Failed to initialize logging: {e}");
-        return;
-    }
+    #[cfg(not(feature = "default-log"))]
+    logging::init().map_err(|e| format!("Failed to initialize logging: {e}"))?;
 
     let secret_key = {
         let path = config!(session_secret_key_path);
-        match fs::read(path).await {
-            Ok(b) => Zeroizing::new(b),
-            Err(e) => {
-                log::error!("Failed to read secret key file `{path}`: {e}");
-                return;
-            }
-        }
+        fs::read(path)
+            .await
+            .map(Zeroizing::new)
+            .map_err(|e| format!("Failed to read secret key file `{path}`: {e}"))?
     };
     if secret_key.len() < 64 {
-        log::error!("Session secret key must be 64 bytes long");
-        return;
+        return Err("Session secret key must be 64 bytes long".into());
     }
     let secret_key = Key::from(&secret_key[..64]);
 
-    let database = match database::init().await {
-        Ok(db) => db,
-        Err(e) => {
-            log::error!("Failed to open database: {e}");
-            return;
-        }
-    };
+    let database = database::init().await.map_err(|e| format!("Failed to open database: {e}"))?;
 
-    if let Err(e) = plugins.init(config!(plugins)) {
-        log::error!("Failed to initialize plugins: {e}");
-        return;
-    }
+    plugins
+        .init(config!(plugins))
+        .map_err(|e| format!("Failed to initialize plugins: {e}"))?;
 
-    if let Err(e) = server::start(secret_key, database, plugins).await {
-        log::error!("Server crashed: {e}");
-    }
+    server::start(secret_key, database, plugins)
+        .await
+        .map_err(|e| format!("Server crashed: {e}"))?;
+
+    #[cfg(feature = "default-log")]
+    logger.end().await;
+
+    Ok(())
 }

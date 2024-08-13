@@ -26,11 +26,11 @@ async-sqlite = { version = "0.3", default-features = false }
 mutually_exclusive_features = "0.1"
 
 # Common library
-tcloud-library = { git = "https://github.com/personal-tiny-cloud/tcloud-library", tag = "0.0.1" }
+tcloud-library = { git = "https://github.com/personal-tiny-cloud/tcloud-library", tag = "0.0.2" }
 
 # Logging
 log = "0.4"
-simplelog = { version = "0.12", optional = true }
+tiny-logs = { git = "https://github.com/personal-tiny-cloud/tiny-logs", tag = "0.0.2", optional = true }
 syslog = { version = "7", optional = true }
 systemd-journal-logger = { version = "2", optional = true }
 
@@ -43,13 +43,13 @@ rustls-pemfile = { version = "2", optional = true }
 totp-rs = { version = "5.5", features = [ "qr", "otpauth" ], optional = true }
 
 # Plugins
-tcloud-archive = { git = "https://github.com/personal-tiny-cloud/tcloud-archive", tag = "0.0.1", optional = true }
+tcloud-archive = { git = "https://github.com/personal-tiny-cloud/tcloud-archive", tag = "0.0.2", optional = true }
 
 [features]
-default = [ "normal-log", "totp-auth", "openssl", "archive" ]
+default = [ "default-log", "totp-auth", "openssl", "archive" ]
 
 # Logging
-normal-log = [ "dep:simplelog" ]
+default-log = [ "dep:tiny-logs" ]
 syslog = [ "dep:syslog" ]
 systemd-log = [ "dep:systemd-journal-logger" ]
 

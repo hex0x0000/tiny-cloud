@@ -52,10 +52,10 @@ pub struct Registration {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Logging {
     pub log_level: String,
-    #[cfg(feature = "normal-log")]
-    pub terminal: bool,
-    #[cfg(feature = "normal-log")]
+    #[cfg(feature = "default-log")]
     pub file: Option<String>,
+    #[cfg(feature = "default-log")]
+    pub file_level: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -116,15 +116,15 @@ impl Config {
                 is_behind_proxy: false,
             },
             logging: {
-                #[cfg(feature = "normal-log")]
+                #[cfg(feature = "default-log")]
                 {
                     Logging {
                         log_level: "info".into(),
-                        terminal: true,
                         file: None,
+                        file_level: None,
                     }
                 }
-                #[cfg(not(feature = "normal-log"))]
+                #[cfg(not(feature = "default-log"))]
                 {
                     Logging { log_level: "warn".into() }
                 }

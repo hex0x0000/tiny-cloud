@@ -54,7 +54,7 @@ pub async fn start(secret_key: Key, database: Pool, plugins: Plugins) -> Result<
                     .limit(*config!(limits.payload_size))
                     .error_handler(|err, _| {
                         let err_msg = err.to_string();
-                        error::InternalError::from_response(err, RequestError::JsonError(err_msg).to_response()).into()
+                        error::InternalError::from_response(err, RequestError::Json(err_msg).to_response()).into()
                     }),
             )
             .app_data(
@@ -63,12 +63,12 @@ pub async fn start(secret_key: Key, database: Pool, plugins: Plugins) -> Result<
                     .memory_limit(*config!(limits.payload_size))
                     .error_handler(|err, _| {
                         let err_msg = err.to_string();
-                        error::InternalError::from_response(err, RequestError::MultipartError(err_msg).to_response()).into()
+                        error::InternalError::from_response(err, RequestError::Multipart(err_msg).to_response()).into()
                     }),
             )
             .app_data(web::QueryConfig::default().error_handler(|err, _| {
                 let err_msg = err.to_string();
-                error::InternalError::from_response(err, RequestError::QueryError(err_msg).to_response()).into()
+                error::InternalError::from_response(err, RequestError::Query(err_msg).to_response()).into()
             }))
             .wrap(
                 IdentityMiddleware::builder()

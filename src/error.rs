@@ -26,11 +26,11 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum RequestError {
     #[error("Invalid JSON request: {0}")]
-    JsonError(String),
+    Json(String),
     #[error("Invalid URL query: {0}")]
-    QueryError(String),
+    Query(String),
     #[error("Invalid Multipart request: {0}")]
-    MultipartError(String),
+    Multipart(String),
 }
 
 impl ErrToResponse for RequestError {
@@ -40,9 +40,9 @@ impl ErrToResponse for RequestError {
 
     fn err_type(&self) -> &'static str {
         match &self {
-            Self::JsonError(_) => stringify!(JsonError),
-            Self::QueryError(_) => stringify!(QueryError),
-            Self::MultipartError(_) => stringify!(MultipartError),
+            Self::Json(_) => stringify!(Json),
+            Self::Query(_) => stringify!(Query),
+            Self::Multipart(_) => stringify!(Multipart),
         }
     }
 

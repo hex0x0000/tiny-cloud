@@ -46,7 +46,7 @@ impl Plugins {
     }
 
     pub fn add_subcmds<'a>(&self, mut cmd: CommandBuilder<&'a str>) -> CommandBuilder<&'a str> {
-        for (_, plugin) in &self.plugins {
+        for plugin in self.plugins.values() {
             if let Some(subcmd) = plugin.subcmd() {
                 cmd = cmd.subcommand(subcmd);
             }
