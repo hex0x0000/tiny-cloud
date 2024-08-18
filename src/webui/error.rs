@@ -19,29 +19,39 @@
 //
 // Email: hex0x0000@protonmail.com
 
-#[macro_use]
-mod macros;
-pub mod auth;
-pub mod plugins;
-pub mod token;
-use crate::config;
-use actix_web::{get, HttpResponse, Responder};
-use std::sync::LazyLock;
-use tcloud_library::serde_json::json;
+use actix_web::{HttpResponse, HttpResponseBuilder};
+use tcloud_library::error::ErrToResponse;
+use thiserror::Error;
 
-static INFO: LazyLock<String> = LazyLock::new(|| {
-    json!({
-        "name": config!(server_name),
-        "version": env!("CARGO_PKG_VERSION"),
-        "description": config!(description),
-        "source": env!("CARGO_PKG_REPOSITORY"),
-        "plugins": crate::plugins::list()
-    })
-    .to_string()
-});
+#[derive(Error, Debug)]
+pub enum WebuiError {
+    #[error("An internal error occurred")]
+    InternalError(String),
+}
 
-/// Returns server info
-#[get("/info")]
-pub async fn info() -> impl Responder {
-    HttpResponse::Ok().content_type("application/json").body(INFO.to_owned())
+impl ErrToResponse for WebuiError {
+    fn error(&self) -> &'static str {
+        "WebuiError"
+    }
+
+    fn err_type(&self) -> &'static str {
+        match self {
+            Self::InternalError(_) => stringify!(InternalError),
+        }
+    }
+
+    fn msg(&self) -> String {
+        self.to_string()
+    }
+
+    fn http_code(&self) -> HttpResponseBuilder {
+        match self {
+            Self::InternalError(_) => HttpResponse::InternalServerError(),
+        }
+    }
+
+    fn handle(&self) {
+        let Self::InternalError(err) = self;
+        log::error!("An internal server error occurred while handling token: {err}");
+    }
 }

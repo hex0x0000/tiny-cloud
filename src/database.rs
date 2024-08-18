@@ -5,16 +5,16 @@
 // Copyright (C) 2024  hex0x0000
 //
 // This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// it under the terms of the GNU Affero General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// GNU Affero General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
+// You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //
 // Email: hex0x0000@protonmail.com
@@ -44,7 +44,7 @@ async fn create_user_dir(user: &str) -> Result<(), DBError> {
     path.push("users");
     path.push(user);
     for plugin in plugins::list() {
-        path.push(plugin);
+        path.push(plugin.name);
         fs::create_dir_all(&path)
             .await
             .map_err(|e| DBError::IOError(format!("Failed to create user directory: {e}")))?;
@@ -96,7 +96,7 @@ pub async fn init() -> Result<Pool, DBError> {
     // Creates directory for plugin requests without a user
     data_path.push("unauth");
     for plugin in plugins::list() {
-        data_path.push(plugin);
+        data_path.push(plugin.name);
         fs::create_dir_all(&data_path)
             .await
             .map_err(|e| DBError::IOError(format!("Failed to create unauth directory: {e}")))?;

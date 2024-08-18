@@ -3,55 +3,15 @@ name = "tiny-cloud"
 authors = [ "hex0x0000 <hex0x0000@protonmail.com>" ]
 description = "Fast, lightweight, self-hosted, KISS (Keep It Simple, Stupid) personal cloud"
 repository = "https://github.com/personal-tiny-cloud/tiny-cloud"
-license = "GPL-3.0"
-version = "0.0.2"
+license = "AGPL-3.0-or-later"
+version = "0.0.1"
 edition = "2021"
 
-[dependencies]
-tokio = { version = "1.29", features = [ "sync", "fs", "parking_lot" ] }
-actix-web = { version = "4", features = [ "secure-cookies" ] }
-actix-session = { version = "0.9", features = [ "cookie-session" ] } # 0.10 does not work for some reason, waiting for updates
-actix-identity = "0.7"
-actix-multipart = { version = "0.7", features = [ "tempfile" ] }
-sql_minifier = "0.1.5"
-maud = "0.26"
-serde = { version = "1.0", features = [ "derive" ] }
-num_cpus = "1"
-thiserror = "1"
-argon2 = "0.5"
-rand = "0.8"
-zeroize = { version = "1.6", features = [ "zeroize_derive" ] }
-rpassword = "7"
-async-sqlite = { version = "0.3", default-features = false }
-mutually_exclusive_features = "0.1"
-
-# Common library
-tcloud-library = { git = "https://github.com/personal-tiny-cloud/tcloud-library", tag = "0.0.2" }
-
-# Logging
-log = "0.4"
-tiny-logs = { git = "https://github.com/personal-tiny-cloud/tiny-logs", tag = "0.0.2", optional = true }
-syslog = { version = "7", optional = true }
-systemd-journal-logger = { version = "2", optional = true }
-
-# TLS
-openssl = { version = "0.10", optional = true }
-rustls = { version = "0.23", optional = true }
-rustls-pemfile = { version = "2", optional = true }
-
-# Authentication
-totp-rs = { version = "5.5", features = [ "qr", "otpauth" ], optional = true }
-
-# Plugins
-tcloud-archive = { git = "https://github.com/personal-tiny-cloud/tcloud-archive", tag = "0.0.2", optional = true }
-
 [features]
-default = [ "default-log", "totp-auth", "openssl", "archive" ]
+default = [ "totp-auth", "openssl", "archive" ]
 
 # Logging
-default-log = [ "dep:tiny-logs" ]
-syslog = [ "dep:syslog" ]
-systemd-log = [ "dep:systemd-journal-logger" ]
+syslog = [ "tiny-logs/syslog" ]
 
 # TLS
 no-tls = []
@@ -67,6 +27,58 @@ totp-auth = [ "dep:totp-rs" ]
 # Plugins
 archive = [ "dep:tcloud-archive" ]
 
+[dependencies]
+tokio = { version = "1.29", features = [ "sync", "fs", "process" ] }
+actix-web = { version = "4", features = [ "secure-cookies" ] }
+actix-session = { version = "0.9", features = [ "cookie-session" ] } # 0.10 does not work for some reason, waiting for updates
+actix-identity = "0.7"
+actix-multipart = { version = "0.7", features = [ "tempfile" ] }
+maud = "0.26"
+serde = { version = "1.0", features = [ "derive" ] }
+num_cpus = "1"
+thiserror = "1"
+argon2 = "0.5"
+rand = "0.8"
+zeroize = { version = "1.6", features = [ "zeroize_derive" ] }
+rpassword = "7"
+async-sqlite = { version = "0.3", default-features = false }
+sql_minifier = "0.1.5"
+mutually_exclusive_features = "0.1"
+
+# Common library
+#tcloud-library = { git = "https://github.com/personal-tiny-cloud/tcloud-library", tag = "0.0.2" }
+tcloud-library = { path = "../tcloud-library" }
+
+# Logging
+log = { version = "0.4", features = [ "release_max_level_info" ] }
+tiny-logs = { git = "https://github.com/personal-tiny-cloud/tiny-logs", tag = "0.0.3" }
+
+# TLS
+openssl = { version = "0.10", optional = true }
+rustls = { version = "0.23", optional = true }
+rustls-pemfile = { version = "2", optional = true }
+
+# Authentication
+totp-rs = { version = "5.5", features = [ "qr", "otpauth" ], optional = true }
+
+# Plugins
+#tcloud-archive = { git = "https://github.com/personal-tiny-cloud/tcloud-archive", tag = "0.0.2", optional = true }
+tcloud-archive = { path = "../tcloud-archive", optional = true }
+
 [build-dependencies]
 tcloud-assets-include = { git = "https://github.com/personal-tiny-cloud/tcloud-assets-include", tag = "0.0.1" }
+
+# Speeds up password checking time
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.release]
+strip = "symbols"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
+[lints.rust]
+unsafe_code = "forbid"
+non_ascii_idents = "forbid"
 

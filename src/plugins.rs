@@ -5,16 +5,16 @@
 // Copyright (C) 2024  hex0x0000
 //
 // This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// it under the terms of the GNU Affero General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// GNU Affero General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
+// You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //
 // Email: hex0x0000@protonmail.com
@@ -27,10 +27,10 @@ use api::plugins::FileForm;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::{boxed::Box, sync::OnceLock};
-use tcloud_library::plugin::User;
+use tcloud_library::plugin::{PluginInfo, User};
 use tcloud_library::{plugin::Plugin, toml::Table, Json, Toml};
 
-static PLUGIN_NAMES: OnceLock<Vec<String>> = OnceLock::new();
+static PLUGIN_NAMES: OnceLock<Vec<&'static PluginInfo>> = OnceLock::new();
 
 pub struct Plugins {
     plugins: HashMap<String, Box<dyn Plugin>>,
@@ -40,7 +40,7 @@ impl Plugins {
     pub fn new() -> Self {
         let plugins = HashMap::from([plugin!("archive", tcloud_archive::ArchivePlugin)]);
         PLUGIN_NAMES
-            .set(plugins.keys().cloned().collect())
+            .set(plugins.values().map(|p| p.info()).collect())
             .expect("Tried to initialize PLUGIN_NAMES while already initialized. This is a bug");
         Self { plugins }
     }
@@ -83,8 +83,12 @@ impl Plugins {
     }
 
     pub async fn request(&self, name: String, user: Option<User>, body: Json) -> HttpResponse {
-        log::info!("Requested '{name}'");
         if let Some(plugin) = self.plugins.get(&name) {
+            if plugin.info().admin_only {
+                if !user.clone().map(|u| u.is_admin).unwrap_or(false) {
+                    return HttpResponse::NotFound().body("");
+                }
+            }
             let path = plugin_path(&user, name);
             plugin.request(user, body, path).await
         } else {
@@ -94,6 +98,11 @@ impl Plugins {
 
     pub async fn file(&self, name: String, user: Option<User>, file: FileForm) -> HttpResponse {
         if let Some(plugin) = self.plugins.get(&name) {
+            if plugin.info().admin_only {
+                if !user.clone().map(|u| u.is_admin).unwrap_or(false) {
+                    return HttpResponse::NotFound().body("");
+                }
+            }
             let path = plugin_path(&user, name);
             plugin.file(user, file.file, file.info.into_inner(), path).await
         } else {
@@ -118,7 +127,7 @@ fn plugin_path(user: &Option<User>, plugin: String) -> PathBuf {
     path
 }
 
-pub fn list() -> &'static Vec<String> {
+pub fn list() -> &'static Vec<&'static PluginInfo> {
     PLUGIN_NAMES
         .get()
         .expect("Tried to access PLUGIN_NAMES when this value was not initialized. This is a bug")

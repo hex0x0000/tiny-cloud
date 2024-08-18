@@ -5,16 +5,16 @@
 // Copyright (C) 2024  hex0x0000
 //
 // This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// it under the terms of the GNU Affero General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// GNU Affero General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
+// You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //
 // Email: hex0x0000@protonmail.com
@@ -51,11 +51,11 @@ pub struct Registration {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Logging {
-    pub log_level: String,
-    #[cfg(feature = "default-log")]
+    pub stdout_level: String,
     pub file: Option<String>,
-    #[cfg(feature = "default-log")]
     pub file_level: Option<String>,
+    #[cfg(feature = "syslog")]
+    pub syslog_level: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -84,13 +84,14 @@ pub struct Config {
     pub server_name: String,
     pub description: String,
     pub url_prefix: String,
+    pub data_directory: String,
+    pub session_secret_key_path: String,
+    pub welcome_page_script: Option<String>,
     pub server: Server,
     pub logging: Logging,
     #[cfg(not(feature = "no-tls"))]
     pub tls: Option<Tls>,
     pub registration: Option<Registration>,
-    pub data_directory: String,
-    pub session_secret_key_path: String,
     pub limits: Limits,
     pub duration: Durations,
     pub cred_size: CredentialSize,
@@ -109,25 +110,19 @@ impl Config {
             description: env!("CARGO_PKG_DESCRIPTION").to_string(),
             server_name: "Tiny Cloud".into(),
             url_prefix: "tcloud".into(),
+            welcome_page_script: None,
             server: Server {
                 host: "127.0.0.1".into(),
                 port: 80,
                 workers: num_cpus::get(),
                 is_behind_proxy: false,
             },
-            logging: {
-                #[cfg(feature = "default-log")]
-                {
-                    Logging {
-                        log_level: "info".into(),
-                        file: None,
-                        file_level: None,
-                    }
-                }
-                #[cfg(not(feature = "default-log"))]
-                {
-                    Logging { log_level: "warn".into() }
-                }
+            logging: Logging {
+                stdout_level: "info".into(),
+                file: None,
+                file_level: None,
+                #[cfg(feature = "syslog")]
+                syslog_level: None,
             },
             #[cfg(any(feature = "rustls", feature = "openssl"))]
             tls: Some(Tls {
@@ -160,7 +155,7 @@ impl Config {
     }
 }
 
-pub async fn open(path: String) -> Result<(), String> {
+pub async fn open(path: &str) -> Result<(), String> {
     let mut file = File::open(&path)
         .await
         .map_err(|e| format!("Failed to open config file `{path}`: {e}"))?;

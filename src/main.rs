@@ -5,16 +5,16 @@
 // Copyright (C) 2024  hex0x0000
 //
 // This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// it under the terms of the GNU Affero General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// GNU Affero General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
+// You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //
 // Email: hex0x0000@protonmail.com
@@ -24,7 +24,6 @@ mod auth;
 mod config;
 mod database;
 mod error;
-mod logging;
 mod plugins;
 mod server;
 #[cfg(not(feature = "no-tls"))]
@@ -37,6 +36,7 @@ mod macros;
 use std::process::ExitCode;
 
 use actix_web::cookie::Key;
+use log::LevelFilter;
 use plugins::Plugins;
 use tcloud_library::tiny_args::*;
 use tokio::fs;
@@ -44,12 +44,33 @@ use zeroize::Zeroizing;
 
 #[actix_web::main]
 async fn main() -> ExitCode {
+    let mut exit = ExitCode::SUCCESS;
     if let Err(e) = run().await {
-        log::error!("{e}");
         eprintln!("{e}");
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
+        log::error!("{e}");
+        exit = ExitCode::FAILURE
+    }
+    tiny_logs::end().await;
+    exit
+}
+
+pub fn log_filter(level: &str) -> Result<LevelFilter, String> {
+    match level {
+        "off" => Ok(LevelFilter::Off),
+        #[cfg(debug_assertions)]
+        "trace" => Ok(LevelFilter::Trace),
+        #[cfg(debug_assertions)]
+        "debug" => Ok(LevelFilter::Debug),
+        "info" => Ok(LevelFilter::Info),
+        "warn" => Ok(LevelFilter::Warn),
+        "error" => Ok(LevelFilter::Error),
+        #[cfg(not(debug_assertions))]
+        "trace" | "debug" => {
+            Err("`trace` and `debug` logs are disabled on release. Compile without the `--release` flag to enable them.".into())
+        }
+        _ => Err(format!(
+            "'{level}' is not a valid log filter. Accepted values are: `off`, `trace`, `debug`, `info`, `warn`, `error`."
+        )),
     }
 }
 
@@ -93,7 +114,7 @@ async fn run() -> Result<(), String> {
 
     let config_path = match parsed.args.get(arg!(--config)) {
         Some(path) => path.value().string(),
-        None => "./config.toml".into(),
+        None => "./config.toml",
     };
 
     config::open(config_path).await?;
@@ -103,17 +124,24 @@ async fn run() -> Result<(), String> {
         return Ok(());
     }
 
-    #[cfg(feature = "default-log")]
-    let logger = tiny_logs::init(
-        logging::get_filter(config!(logging.log_level))?,
+    let default_level = log_filter(config!(logging.stdout_level))?;
+    tiny_logs::init(
+        default_level,
         config!(logging.file).clone(),
-        config!(logging.file_level).clone().map(|f| logging::get_filter(&f)).transpose()?,
+        config!(logging.file_level)
+            .clone()
+            .map(|f| log_filter(&f))
+            .transpose()?
+            .unwrap_or(default_level),
+        #[cfg(feature = "syslog")]
+        config!(logging.syslog_level)
+            .clone()
+            .map(|f| log_filter(&f))
+            .transpose()?
+            .unwrap_or(default_level),
     )
     .await
     .map_err(|e| format!("Failed to initialize logging: {e}"))?;
-
-    #[cfg(not(feature = "default-log"))]
-    logging::init().map_err(|e| format!("Failed to initialize logging: {e}"))?;
 
     let secret_key = {
         let path = config!(session_secret_key_path);
@@ -135,10 +163,5 @@ async fn run() -> Result<(), String> {
 
     server::start(secret_key, database, plugins)
         .await
-        .map_err(|e| format!("Server crashed: {e}"))?;
-
-    #[cfg(feature = "default-log")]
-    logger.end().await;
-
-    Ok(())
+        .map_err(|e| format!("Server crashed: {e}"))
 }
