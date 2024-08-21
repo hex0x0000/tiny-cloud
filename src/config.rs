@@ -86,7 +86,7 @@ pub struct Config {
     pub url_prefix: String,
     pub data_directory: String,
     pub session_secret_key_path: String,
-    pub welcome_page_script: Option<String>,
+    pub homepage_script: Option<String>,
     pub server: Server,
     pub logging: Logging,
     #[cfg(not(feature = "no-tls"))]
@@ -110,7 +110,7 @@ impl Config {
             description: env!("CARGO_PKG_DESCRIPTION").to_string(),
             server_name: "Tiny Cloud".into(),
             url_prefix: "tcloud".into(),
-            welcome_page_script: None,
+            homepage_script: None,
             server: Server {
                 host: "127.0.0.1".into(),
                 port: 80,

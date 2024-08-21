@@ -1,0 +1,95 @@
+/**
+ * This file is part of the Tiny Cloud project.
+ * You can find the source code of every repository here:
+ *			https://github.com/personal-tiny-cloud
+ * 
+ * Copyright (C) 2024  hex0x0000
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 
+ * Email: hex0x0000@protonmail.com
+ * */
+
+#navbar {
+	padding-top: 10px;
+	padding-bottom: 10px;
+	padding-left: 20px;
+	padding-right: 20px;
+	background-color: var(--sec-bg-color);
+	color: var(--sec-fg-color);
+	border-radius: 10px;
+	overflow-x: scroll;
+	overflow-y: hidden;
+	max-height: 60px;
+	white-space: nowrap;
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+	text-transform: uppercase;
+	font-family: monospace, monospace;
+	font-size: large;
+	text-shadow: 1px 1px 2px var(--main-color);
+	display: flex;
+	flex-direction: row;
+}
+
+#logobox {
+	display: inline-block;
+	padding: 1px;
+}
+
+#logobox img {
+	width: 32px;
+	height: 32px;
+	transition: .4s;
+}
+
+#logobox img:hover {
+	width: 42px;
+	height: 42px;
+	transition: .4s;
+}
+
+#navbar::-webkit-scrollbar {
+	display: none;
+}
+
+#navbar .navelem a {
+	padding-top: 12px;
+	padding-bottom: 12px;
+	padding-left: 5px;
+	padding-right: 5px;
+	border-radius: 10px;
+	color: var(--sec-fg-color);
+	text-decoration: none;
+	transition: .4s;
+}
+
+#navbar .navelem a:hover {
+	background-color: var(--sec-fg-color);
+	color: var(--sec-bg-color);
+	padding:12px 15px;
+	border-style: solid;
+	border-color: var(--main-color);
+	border-width: 1px;
+	font-size: x-large;
+	transition: .4s;
+}
+
+#navbar .navelem {
+	padding-top: 12px;
+	padding-bottom: 12px;
+	padding-left: 5px;
+	padding-right: 5px;
+	display: inline-block;
+}

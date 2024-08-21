@@ -19,15 +19,13 @@
 //
 // Email: hex0x0000@protonmail.com
 
-use crate::auth::{add_user, database, error::AuthError};
+use crate::auth::{add_user, error::AuthError};
+use async_sqlite::Pool;
 use std::io::{self, Write};
 use zeroize::{Zeroize, Zeroizing};
 
 #[cfg(not(feature = "totp-auth"))]
-pub async fn create_user() -> Result<(), String> {
-    // Init DB
-    let pool = database::init().await.map_err(|e| e.to_string())?;
-
+pub async fn create_user(pool: &Pool) -> Result<(), String> {
     let mut input = String::new();
 
     // Gets user from CLI
@@ -77,11 +75,8 @@ pub async fn create_user() -> Result<(), String> {
 }
 
 #[cfg(feature = "totp-auth")]
-pub async fn create_user() -> Result<(), String> {
+pub async fn create_user(pool: &Pool) -> Result<(), String> {
     use std::{fs::File, path::PathBuf};
-
-    // Init DB
-    let pool = database::init().await.map_err(|e| e.to_string())?;
 
     let mut input = String::new();
 

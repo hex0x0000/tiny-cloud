@@ -82,7 +82,7 @@ async fn run() -> Result<(), String> {
         .version(env!("CARGO_PKG_VERSION"))
         .license(env!("CARGO_PKG_LICENSE"))
         .arg(
-            arg! { -c, --config },
+            arg!(-c, --config),
             ArgType::String,
             "Path to the configuration file (default: ./config.toml)",
         )
@@ -92,7 +92,7 @@ async fn run() -> Result<(), String> {
             ArgType::Flag,
             "Writes the default configuration and exits",
         )
-        .arg(arg! { -h, --help }, ArgType::Flag, "Shows this help and exits");
+        .arg(arg!(-h, --help), ArgType::Flag, "Shows this help and exits");
     cmd = plugins.add_subcmds(cmd);
     let parsed = cmd.build().parse()?;
 
@@ -119,8 +119,12 @@ async fn run() -> Result<(), String> {
 
     config::open(config_path).await?;
 
+    let database = database::init().await.map_err(|e| format!("Failed to open database: {e}"))?;
+
     if parsed.args.contains(arg! { --create-user }) {
-        auth::cli::create_user().await.map_err(|e| format!("Failed to create user: {e}"))?;
+        auth::cli::create_user(&database)
+            .await
+            .map_err(|e| format!("Failed to create user: {e}"))?;
         return Ok(());
     }
 
@@ -154,8 +158,6 @@ async fn run() -> Result<(), String> {
         return Err("Session secret key must be 64 bytes long".into());
     }
     let secret_key = Key::from(&secret_key[..64]);
-
-    let database = database::init().await.map_err(|e| format!("Failed to open database: {e}"))?;
 
     plugins
         .init(config!(plugins))

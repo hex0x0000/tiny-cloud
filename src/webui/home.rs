@@ -21,33 +21,76 @@
 
 use std::sync::{LazyLock, OnceLock};
 
-use crate::{config, utils, web_file};
-use maud::{html, PreEscaped, DOCTYPE};
+use crate::{config, plugins, utils, web_file};
+use maud::{html, Markup, PreEscaped, DOCTYPE};
 use serde::Deserialize;
 use tcloud_library::serde_json;
 use tokio::process::Command;
 
-static DEFAULT_WELCOME_PAGE: LazyLock<PageData> = LazyLock::new(|| PageData {
+static DEFAULT_HOMEPAGE: LazyLock<PageData> = LazyLock::new(|| PageData {
     only_once: None,
-    html: web_file!("welcome.html").into(),
+    html: web_file!("homepage.html").into(),
     js: None,
     css: None,
 });
-static WELCOME_PAGE: OnceLock<PageData> = OnceLock::new();
+
+static HOMEPAGE: OnceLock<PageData> = OnceLock::new();
+
+pub static NAVBAR_ADMIN: LazyLock<Markup> = LazyLock::new(|| {
+    html!(
+        div id="navbar" {
+            div id="logobox" {
+                a href=(utils::make_url("/ui")) {
+                    img id="logo" src="";
+                }
+            }
+            div class="navelem" {
+                a href=(utils::make_url("/ui/settings")) { "Settings" }
+            }
+            div class="navelem" {
+                a href=(utils::make_url("/ui/users")) { "Users" }
+            }
+            @for plugin in plugins::list() {
+                div class="navelem" {
+                    a href=(utils::make_url(&format!("/ui/p/{}", plugin.name))) { (plugin.name) }
+                }
+            }
+        }
+    )
+});
+
+pub static NAVBAR_USER: LazyLock<Markup> = LazyLock::new(|| {
+    html!(
+        div id="navbar" {
+            div id="logobox" {
+                a href=(utils::make_url(&format!("/ui"))) {
+                    img id="logo" src="";
+                }
+            }
+            @for plugin in plugins::list() {
+                @if !plugin.admin_only {
+                    div class="navelem" {
+                        a href=(utils::make_url(&format!("/ui/p/{}", plugin.name))) { (plugin.name) }
+                    }
+                }
+            }
+        }
+    )
+});
 
 #[derive(Deserialize, Clone)]
-pub struct PageData {
-    pub only_once: Option<bool>,
-    pub html: String,
-    pub js: Option<String>,
-    pub css: Option<String>,
+struct PageData {
+    only_once: Option<bool>,
+    html: String,
+    js: Option<String>,
+    css: Option<String>,
 }
 
-pub async fn get(username: String, is_admin: bool) -> PageData {
-    if let Some(page) = WELCOME_PAGE.get() {
-        page.clone()
+async fn get(username: String, is_admin: bool) -> PageData {
+    if let Some(page) = HOMEPAGE.get() {
+        page.to_owned()
     } else {
-        if let Some(script) = config!(welcome_page_script) {
+        if let Some(script) = config!(homepage_script) {
             if let Some(page) = Command::new(script)
                 .args(&[username, format!("{}", is_admin)])
                 .output()
@@ -63,15 +106,15 @@ pub async fn get(username: String, is_admin: bool) -> PageData {
                 .and_then(|s| serde_json::from_str::<PageData>(&s).ok())
             {
                 if page.only_once.unwrap_or(false) {
-                    WELCOME_PAGE.get_or_init(|| page.clone());
+                    HOMEPAGE.get_or_init(|| page.clone());
                 }
                 page
             } else {
                 log::error!("Failed to get welcome page from script. Using default page.");
-                DEFAULT_WELCOME_PAGE.to_owned()
+                DEFAULT_HOMEPAGE.to_owned()
             }
         } else {
-            DEFAULT_WELCOME_PAGE.to_owned()
+            DEFAULT_HOMEPAGE.to_owned()
         }
     }
 }
@@ -82,16 +125,29 @@ pub async fn page(username: String, is_admin: bool) -> String {
         (DOCTYPE)
         html lang="en-US" {
             head {
-                title { "Main Page" }
+                title { "Home Page" }
                 meta name="application-name" content=(config!(server_name));
                 meta charset="utf-8";
                 meta name="tcloud-prefix" content=(config!(url_prefix));
                 meta name="viewport" content="width=device-width, initial-scale=1.0";
                 link rel="icon" type="image/x-icon" href=(utils::make_url("/static/favicon.ico"));
-                script type="text/javascript" { (web_file!("global.js")) (PreEscaped(page.js.unwrap_or("".into()))) }
-                style { (web_file!("global.css")) (PreEscaped(page.css.unwrap_or("".into()))) }
+                script type="text/javascript" {
+                    (web_file!("global.js"))
+                    (web_file!("navbar.js"))
+                    (PreEscaped(page.js.unwrap_or("".into())))
+                }
+                style {
+                    (web_file!("global.css"))
+                    (web_file!("navbar.css"))
+                    (PreEscaped(page.css.unwrap_or("".into())))
+                }
             }
             body {
+                @if is_admin {
+                    (*NAVBAR_ADMIN)
+                } @else {
+                    (*NAVBAR_USER)
+                }
                 (PreEscaped(page.html))
             }
         }
