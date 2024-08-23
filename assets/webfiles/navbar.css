@@ -93,3 +93,26 @@
 	padding-right: 5px;
 	display: inline-block;
 }
+
+@keyframes entrance {
+	from {
+		display: none;
+		opacity: 0;
+	}
+	to {
+		display: inline-block;
+		opacity: 1;
+	}
+}
+
+#navbar .hidden {
+	display: none;
+}
+
+#navbar .shown {
+	display: inline-block;
+	animation-name: entrance;
+	animation-duration: .5s;
+	animation-timing-function: ease-out;
+}
+

@@ -40,14 +40,15 @@ pub static NAVBAR_ADMIN: LazyLock<Markup> = LazyLock::new(|| {
     html!(
         div id="navbar" {
             div id="logobox" {
-                a href=(utils::make_url("/ui")) {
-                    img id="logo" src="";
-                }
+                img id="logo" src="";
             }
-            div class="navelem" {
+            div class="navelem hidden" {
+                a href=(utils::make_url("/ui")) { "Home" }
+            }
+            div class="navelem hidden" {
                 a href=(utils::make_url("/ui/settings")) { "Settings" }
             }
-            div class="navelem" {
+            div class="navelem hidden" {
                 a href=(utils::make_url("/ui/users")) { "Users" }
             }
             @for plugin in plugins::list() {
@@ -62,11 +63,6 @@ pub static NAVBAR_ADMIN: LazyLock<Markup> = LazyLock::new(|| {
 pub static NAVBAR_USER: LazyLock<Markup> = LazyLock::new(|| {
     html!(
         div id="navbar" {
-            div id="logobox" {
-                a href=(utils::make_url(&format!("/ui"))) {
-                    img id="logo" src="";
-                }
-            }
             @for plugin in plugins::list() {
                 @if !plugin.admin_only {
                     div class="navelem" {
