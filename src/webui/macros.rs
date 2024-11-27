@@ -27,9 +27,17 @@ macro_rules! image {
     };
 }
 
-/// Gets a CSS/JS file from assets
+/// Gets an HTML/JS/CSS file from assets without escaping it
 #[macro_export]
-macro_rules! web_file {
+macro_rules! unescaped_webfile {
+    ($filename:expr) => {
+        include_str!(concat!(env!("OUT_DIR"), "/assets/webfiles/", $filename))
+    };
+}
+
+/// Gets an HTML/JS/CSS file from assets
+#[macro_export]
+macro_rules! webfile {
     ($filename:expr) => {
         PreEscaped(include_str!(concat!(env!("OUT_DIR"), "/assets/webfiles/", $filename)))
     };

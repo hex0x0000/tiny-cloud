@@ -29,7 +29,6 @@ use async_sqlite::{
     Pool,
 };
 use rand::{distributions::Alphanumeric, Rng};
-use sql_minifier::macros::minify_sql;
 use std::time::Duration;
 
 #[non_exhaustive]
@@ -39,17 +38,14 @@ pub struct Token {
     pub expire_date: i64,
 }
 
-pub const TOKEN_TABLE: &str = minify_sql!(
-    "
-CREATE TABLE IF NOT EXISTS tokens (
+pub const TOKEN_TABLE: &str = "CREATE TABLE IF NOT EXISTS tokens (
     id          INTEGER PRIMARY KEY,
     token       TEXT    NOT NULL,
-    expire_date INTEGER NOT NULL,
+    expire_date INT     NOT NULL,
     UNIQUE(token)
-)"
-);
+)";
 
-const INSERT_TOKEN: &str = minify_sql!("INSERT INTO tokens (token, expire_date) VALUES (:token, :expire_date)");
+const INSERT_TOKEN: &str = "INSERT INTO tokens (token, expire_date) VALUES (:token, :expire_date)";
 
 /// Creates a token and adds it to the database
 /// Optionally takes an `duration_secs` param which specifies the duration, if none

@@ -20,15 +20,10 @@
 // Email: hex0x0000@protonmail.com
 
 "use strict";
-const $ = function(id) { return document.getElementById(id); };
+const $ = function(e) { return document.getElementById(e); };
 try {
-	var _p = document.querySelector('meta[name="tcloud-prefix"]').content;
-	if (_p == '') {
-		_p = '/';
-	} else {
-		_p = '/' + _p + '/';
-	}
+	let p = document.querySelector('meta[name="tcloud-prefix"]').content;
+	var prefix = (p == '') ? '/' : '/' + p + '/';
 } catch (e) {
-	var _p = '/';
+	var prefix = '/';
 }
-const prefix = _p;

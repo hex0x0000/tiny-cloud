@@ -65,9 +65,9 @@ pub fn log_filter(level: &str) -> Result<LevelFilter, String> {
         "warn" => Ok(LevelFilter::Warn),
         "error" => Ok(LevelFilter::Error),
         #[cfg(not(debug_assertions))]
-        "trace" | "debug" => {
-            Err("`trace` and `debug` logs are disabled on release. Compile without the `--release` flag to enable them.".into())
-        }
+        "trace" | "debug" => Err(format!(
+            "'{level}' logs are disabled on release. Compile without the `--release` flag to enable them."
+        )),
         _ => Err(format!(
             "'{level}' is not a valid log filter. Accepted values are: `off`, `trace`, `debug`, `info`, `warn`, `error`."
         )),
@@ -82,46 +82,37 @@ async fn run() -> Result<(), String> {
         .version(env!("CARGO_PKG_VERSION"))
         .license(env!("CARGO_PKG_LICENSE"))
         .arg(
-            arg!(-c, --config),
-            ArgType::String,
-            "Path to the configuration file (default: ./config.toml)",
+            arg!(-'c', --config),
+            value!(path, "./config.toml"),
+            "Path to the configuration file",
         )
-        .arg(arg! { --create-user }, ArgType::Flag, "Creates a new user and exits")
-        .arg(
-            arg! { --write-default },
-            ArgType::Flag,
-            "Writes the default configuration and exits",
-        )
-        .arg(arg!(-h, --help), ArgType::Flag, "Shows this help and exits");
+        .arg(arg! { --create-user }, value!(), "Creates a new user and exits")
+        .arg(arg! { --write-default }, value!(), "Writes the default configuration and exits")
+        .arg(arg!(-'h', --help), value!(), "Shows this help and exits");
     cmd = plugins.add_subcmds(cmd);
-    let parsed = cmd.build().parse()?;
+    let parsed = cmd.parse()?;
 
     if plugins.handle_args(&parsed) {
         return Ok(());
     }
 
-    if parsed.args.contains(arg!(--help)) {
+    if parsed.args.count(arg!(--help)) > 0 {
         println!("{}", parsed.help);
         return Ok(());
     }
 
-    if parsed.args.contains(arg! { --write-default }) {
+    if parsed.args.count(arg! { --write-default }) > 0 {
         config::write_default(plugins.default_configs())
             .await
             .map_err(|e| format!("Failed to write default config: {e}"))?;
         return Ok(());
     }
 
-    let config_path = match parsed.args.get(arg!(--config)) {
-        Some(path) => path.value().string(),
-        None => "./config.toml",
-    };
-
-    config::open(config_path).await?;
+    config::open(parsed.args.get(arg!(--config)).path().unwrap()).await?;
 
     let database = database::init().await.map_err(|e| format!("Failed to open database: {e}"))?;
 
-    if parsed.args.contains(arg! { --create-user }) {
+    if parsed.args.count(arg! { --create-user }) > 0 {
         auth::cli::create_user(&database)
             .await
             .map_err(|e| format!("Failed to create user: {e}"))?;

@@ -45,7 +45,7 @@ impl Plugins {
         Self { plugins }
     }
 
-    pub fn add_subcmds<'a>(&self, mut cmd: CommandBuilder<&'a str>) -> CommandBuilder<&'a str> {
+    pub fn add_subcmds(&self, mut cmd: Command) -> Command {
         for plugin in self.plugins.values() {
             if let Some(subcmd) = plugin.subcmd() {
                 cmd = cmd.subcommand(subcmd);
@@ -56,7 +56,7 @@ impl Plugins {
 
     pub fn handle_args(&self, parsed: &ParsedCommand) -> bool {
         if !parsed.parents.is_empty() {
-            if let Some(plugin) = self.plugins.get(&parsed.name) {
+            if let Some(plugin) = self.plugins.get(parsed.name) {
                 plugin.handle_args(parsed);
                 return true;
             }
@@ -84,10 +84,8 @@ impl Plugins {
 
     pub async fn request(&self, name: String, user: Option<User>, body: Json) -> HttpResponse {
         if let Some(plugin) = self.plugins.get(&name) {
-            if plugin.info().admin_only {
-                if !user.clone().map(|u| u.is_admin).unwrap_or(false) {
-                    return HttpResponse::NotFound().body("");
-                }
+            if plugin.info().admin_only && !user.as_ref().map(|u| u.is_admin).unwrap_or(false) {
+                return HttpResponse::NotFound().body("");
             }
             let path = plugin_path(&user, name);
             plugin.request(user, body, path).await
@@ -98,10 +96,8 @@ impl Plugins {
 
     pub async fn file(&self, name: String, user: Option<User>, file: FileForm) -> HttpResponse {
         if let Some(plugin) = self.plugins.get(&name) {
-            if plugin.info().admin_only {
-                if !user.clone().map(|u| u.is_admin).unwrap_or(false) {
-                    return HttpResponse::NotFound().body("");
-                }
+            if plugin.info().admin_only && !user.as_ref().map(|u| u.is_admin).unwrap_or(false) {
+                return HttpResponse::NotFound().body("");
             }
             let path = plugin_path(&user, name);
             plugin.file(user, file.file, file.info.into_inner(), path).await

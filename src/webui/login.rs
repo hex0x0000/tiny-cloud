@@ -19,18 +19,8 @@
 //
 // Email: hex0x0000@protonmail.com
 
-use crate::{config, utils, web_file};
-use maud::{html, Markup, PreEscaped, DOCTYPE};
-
-fn registration_link() -> Markup {
-    if config!(registration).is_some() {
-        html! {
-            a href=(utils::make_url("/ui/register")) { "Register Here" }
-        }
-    } else {
-        html!()
-    }
-}
+use crate::{config, utils, webfile};
+use maud::{html, PreEscaped, DOCTYPE};
 
 pub fn page() -> String {
     html! {
@@ -43,8 +33,8 @@ pub fn page() -> String {
                 meta name="viewport" content="width=device-width, initial-scale=1.0";
                 meta name="tcloud-prefix" content=(config!(url_prefix));
                 link rel="icon" type="image/x-icon" href=(utils::make_url("/static/favicon.ico"));
-                script type="text/javascript" { (web_file!("global.js")) (web_file!("login.js")) }
-                style { (web_file!("global.css")) (web_file!("login.css")) }
+                script type="text/javascript" { (webfile!("global.js")) (webfile!("login.js")) }
+                style { (webfile!("global.css")) (webfile!("login.css")) }
             }
             body {
                 p; div id="title" { (config!(server_name)) }
@@ -55,21 +45,19 @@ pub fn page() -> String {
                     br; input type="text" id="user" name="user";
                     br; label for="password" { "Password:" }
                     br; input type="password" id="password" name="password";
-                    (
-                        if cfg!(feature = "totp-auth") {
-                            html! {
-                                br; label for="totp" { "TOTP Token:" }
-                                br; input type="totp" id="totp" name="totp";
-                            }
-                        } else { html!() }
-                    )
+                    @if cfg!(feature = "totp-auth") {
+                        br; label for="totp" { "TOTP Token:" }
+                        br; input type="totp" id="totp" name="totp";
+                    }
                     br; input value="Login" type="submit" id="btn";
                 }
                 div id="msg" {}
-                div id="reglink" { (registration_link()) }
+                @if config!(registration).is_some() {
+                    p id="reglink" { a href=(utils::make_url("/ui/register")) { "Register Here" } }
+                }
                 footer {
                     br; "Tiny Cloud is licensed under the GNU Affero General Public License v3.0 or later"
-                    br; a href=(env!("CARGO_PKG_REPOSITORY")) { "You can find the source code of the server here." }
+                    br; a href=(env!("CARGO_PKG_REPOSITORY")) { "You can find the source code here." }
                 }
             }
         }

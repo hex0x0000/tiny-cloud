@@ -21,6 +21,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::env::current_exe;
+use std::path::PathBuf;
 use tcloud_library::toml;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -155,16 +156,16 @@ impl Config {
     }
 }
 
-pub async fn open(path: &str) -> Result<(), String> {
+pub async fn open(path: &PathBuf) -> Result<(), String> {
     let mut file = File::open(&path)
         .await
-        .map_err(|e| format!("Failed to open config file `{path}`: {e}"))?;
+        .map_err(|e| format!("Failed to open config file `{}`: {e}", path.display()))?;
     let mut config = String::new();
     file.read_to_string(&mut config)
         .await
-        .map_err(|e| format!("Failed to read config file `{path}`: {e}"))?;
+        .map_err(|e| format!("Failed to read config file `{}`: {e}", path.display()))?;
     CONFIG
-        .set(toml::from_str(&config).map_err(|e| format!("Failed to read config file `{path}`: {e}"))?)
+        .set(toml::from_str(&config).map_err(|e| format!("Failed to read config file `{}`: {e}", path.display()))?)
         .expect("Config has already been opened. This is a bug");
     Ok(())
 }

@@ -19,17 +19,18 @@
 //
 // Email: hex0x0000@protonmail.com
 
-use crate::{config, utils, web_file};
+use crate::{config, utils, webfile};
 use maud::{html, Markup, PreEscaped, DOCTYPE};
+use std::sync::LazyLock;
 
 #[cfg(not(feature = "totp-auth"))]
-const REGISTER_JS: PreEscaped<&str> = web_file!("register.js");
+const REGISTER_JS: PreEscaped<&str> = webfile!("register.js");
 
 #[cfg(feature = "totp-auth")]
-const REGISTER_JS: PreEscaped<&str> = web_file!("register_totp.js");
+const REGISTER_JS: PreEscaped<&str> = webfile!("register_totp.js");
 
 #[cfg(not(feature = "totp-auth"))]
-fn form() -> Markup {
+pub static FORM: LazyLock<Markup> = LazyLock::new(|| {
     html! {
         form id="register" name="register" {
             br; label for="user" { "Username:" }
@@ -43,10 +44,10 @@ fn form() -> Markup {
             input value="Register" type="submit" id="btn";
         }
     }
-}
+});
 
 #[cfg(feature = "totp-auth")]
-fn form() -> Markup {
+pub static FORM: LazyLock<Markup> = LazyLock::new(|| {
     html! {
         form id="register" name="register" {
             br; label for="user" { "Username:" }
@@ -68,7 +69,7 @@ fn form() -> Markup {
             button type="button" id="continue" { "Continue" }
         }
     }
-}
+});
 
 pub fn page() -> String {
     html! {
@@ -81,18 +82,18 @@ pub fn page() -> String {
                 meta name="viewport" content="width=device-width, initial-scale=1.0";
                 meta name="tcloud-prefix" content=(config!(url_prefix));
                 link rel="icon" type="image/x-icon" href=(utils::make_url("/static/favicon.ico"));
-                script type="text/javascript" { (web_file!("global.js")) (REGISTER_JS) }
-                style { (web_file!("global.css")) (web_file!("register.css")) }
+                script type="text/javascript" { (webfile!("global.js")) (REGISTER_JS) }
+                style { (webfile!("global.css")) (webfile!("register.css")) }
             }
             body {
                 p; div id="title" { (config!(server_name)) }
                 p; div id="version" { (env!("CARGO_PKG_VERSION")) }
                 p; div id="description" { (config!(description)) }
-                (form())
+                (*FORM)
                 div id="msg" {}
                 footer {
                     br; "Tiny Cloud is licensed under the GNU Affero General Public License v3.0 or later"
-                    br; a href=(env!("CARGO_PKG_REPOSITORY")) { "You can find the source code of the server here." }
+                    br; a href=(env!("CARGO_PKG_REPOSITORY")) { "You can find the source code here." }
                 }
             }
         }

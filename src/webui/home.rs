@@ -21,18 +21,11 @@
 
 use std::sync::{LazyLock, OnceLock};
 
-use crate::{config, plugins, utils, web_file};
+use crate::{config, plugins, unescaped_webfile, utils, webfile};
 use maud::{html, Markup, PreEscaped, DOCTYPE};
 use serde::Deserialize;
 use tcloud_library::serde_json;
 use tokio::process::Command;
-
-static DEFAULT_HOMEPAGE: LazyLock<PageData> = LazyLock::new(|| PageData {
-    only_once: None,
-    html: web_file!("homepage.html").into(),
-    js: None,
-    css: None,
-});
 
 static HOMEPAGE: OnceLock<PageData> = OnceLock::new();
 
@@ -53,7 +46,9 @@ pub static NAVBAR_ADMIN: LazyLock<Markup> = LazyLock::new(|| {
             }
             @for plugin in plugins::list() {
                 div class="navelem" {
-                    a href=(utils::make_url(&format!("/ui/p/{}", plugin.name))) { (plugin.name) }
+                    a href=(utils::make_url(&format!("/ui/p/{}", plugin.name))) title=(plugin.description) {
+                        (plugin.name)
+                    }
                 }
             }
         }
@@ -63,10 +58,21 @@ pub static NAVBAR_ADMIN: LazyLock<Markup> = LazyLock::new(|| {
 pub static NAVBAR_USER: LazyLock<Markup> = LazyLock::new(|| {
     html!(
         div id="navbar" {
+            div id="logobox" {
+                img id="logo" src="";
+            }
+            div class="navelem hidden" {
+                a href=(utils::make_url("/ui")) { "Home" }
+            }
+            div class="navelem hidden" {
+                a href=(utils::make_url("/ui/settings")) { "Settings" }
+            }
             @for plugin in plugins::list() {
                 @if !plugin.admin_only {
                     div class="navelem" {
-                        a href=(utils::make_url(&format!("/ui/p/{}", plugin.name))) { (plugin.name) }
+                        a href=(utils::make_url(&format!("/ui/p/{}", plugin.name))) title=(plugin.description) {
+                            (plugin.name)
+                        }
                     }
                 }
             }
@@ -80,6 +86,17 @@ struct PageData {
     html: String,
     js: Option<String>,
     css: Option<String>,
+}
+
+impl Default for PageData {
+    fn default() -> Self {
+        Self {
+            only_once: None,
+            html: unescaped_webfile!("homepage.html").into(),
+            js: None,
+            css: None,
+        }
+    }
 }
 
 async fn get(username: String, is_admin: bool) -> PageData {
@@ -107,10 +124,10 @@ async fn get(username: String, is_admin: bool) -> PageData {
                 page
             } else {
                 log::error!("Failed to get welcome page from script. Using default page.");
-                DEFAULT_HOMEPAGE.to_owned()
+                PageData::default()
             }
         } else {
-            DEFAULT_HOMEPAGE.to_owned()
+            HOMEPAGE.get_or_init(|| PageData::default()).to_owned()
         }
     }
 }
@@ -128,13 +145,13 @@ pub async fn page(username: String, is_admin: bool) -> String {
                 meta name="viewport" content="width=device-width, initial-scale=1.0";
                 link rel="icon" type="image/x-icon" href=(utils::make_url("/static/favicon.ico"));
                 script type="text/javascript" {
-                    (web_file!("global.js"))
-                    (web_file!("navbar.js"))
+                    (webfile!("global.js"))
+                    (webfile!("navbar.js"))
                     (PreEscaped(page.js.unwrap_or("".into())))
                 }
                 style {
-                    (web_file!("global.css"))
-                    (web_file!("navbar.css"))
+                    (webfile!("global.css"))
+                    (webfile!("navbar.css"))
                     (PreEscaped(page.css.unwrap_or("".into())))
                 }
             }

@@ -24,7 +24,6 @@ use async_sqlite::{
     rusqlite::{self, named_params, ErrorCode, OptionalExtension},
     Error, Pool,
 };
-use sql_minifier::macros::minify_sql;
 
 /// Authentication data of a user.
 #[non_exhaustive]
@@ -37,20 +36,16 @@ pub struct UserAuth {
 }
 
 #[cfg(not(feature = "totp-auth"))]
-pub const USERS_TABLE: &str = minify_sql!(
-    "
-CREATE TABLE IF NOT EXISTS users (
+pub const USERS_TABLE: &str = "CREATE TABLE IF NOT EXISTS users (
     id          INTEGER PRIMARY KEY,
     username    TEXT    NOT NULL,
     pass_hash   TEXT    NOT NULL,
-    is_admin    INTEGER DEFAULT 0,
+    is_admin    INT     DEFAULT 0,
     UNIQUE(username)
-)"
-);
+)";
 
 #[cfg(feature = "totp-auth")]
-pub const USERS_TABLE: &str = minify_sql!(
-    "
+pub const USERS_TABLE: &str = "
 CREATE TABLE IF NOT EXISTS users (
     id          INTEGER PRIMARY KEY,
     username    TEXT    NOT NULL,
@@ -58,21 +53,19 @@ CREATE TABLE IF NOT EXISTS users (
     totp        TEXT    NOT NULL,
     is_admin    INTEGER DEFAULT 0,
     UNIQUE(username)
-)"
-);
+)";
 
 #[cfg(not(feature = "totp-auth"))]
-const INSERT_USER: &str = minify_sql!("INSERT INTO users (username, pass_hash, is_admin) VALUES (:username, :pass_hash, :is_admin)");
+const INSERT_USER: &str = "INSERT INTO users (username, pass_hash, is_admin) VALUES (:username, :pass_hash, :is_admin)";
 
 #[cfg(feature = "totp-auth")]
-const INSERT_USER: &str =
-    minify_sql!("INSERT INTO users (username, pass_hash, totp, is_admin) VALUES (:username, :pass_hash, :totp, :is_admin)");
+const INSERT_USER: &str = "INSERT INTO users (username, pass_hash, totp, is_admin) VALUES (:username, :pass_hash, :totp, :is_admin)";
 
 #[cfg(not(feature = "totp-auth"))]
-const GET_USER_AUTH: &str = minify_sql!("SELECT pass_hash FROM users WHERE username=?1");
+const GET_USER_AUTH: &str = "SELECT pass_hash FROM users WHERE username=?1";
 
 #[cfg(feature = "totp-auth")]
-const GET_USER_AUTH: &str = minify_sql!("SELECT pass_hash, totp FROM users WHERE username=?1");
+const GET_USER_AUTH: &str = "SELECT pass_hash, totp FROM users WHERE username=?1";
 
 /// Adds a new user to the database, fails if it already exists.
 /// If TOTP feature is enabled, it requires the totp-secret to be inserted
