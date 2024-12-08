@@ -20,8 +20,7 @@
 // Email: hex0x0000@protonmail.com
 
 use crate::config;
-use actix_identity::error::GetIdentityError;
-use actix_web::{dev::ConnectionInfo, HttpResponse};
+use actix_web::dev::ConnectionInfo;
 
 /// Creates URL using the prefix specified in settings
 pub fn make_url(url: &str) -> String {
@@ -52,19 +51,4 @@ pub fn sanitize_user(username: &str) -> String {
         .chars()
         .filter(|c| c.is_alphanumeric())
         .collect()
-}
-
-/// Unwraps id and returns its string or its error as a response
-pub fn id_err_into(err: GetIdentityError) -> HttpResponse {
-    match err {
-        GetIdentityError::SessionGetError(err) => {
-            log::error!("Failed to accessing the session store while validating identity: {err}");
-            HttpResponse::InternalServerError().body("")
-        }
-        GetIdentityError::LostIdentityError(err) => {
-            log::error!("Identity info was lost after being validated (Actix Identity bug): {err}");
-            HttpResponse::InternalServerError().body("")
-        }
-        _ => HttpResponse::Forbidden().body(""),
-    }
 }

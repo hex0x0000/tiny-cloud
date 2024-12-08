@@ -24,9 +24,10 @@ mod home;
 pub mod images;
 mod login;
 mod register;
+mod settings;
 #[macro_use]
 mod macros;
-use crate::{config, database, utils};
+use crate::{auth::validate_user, config, utils};
 use actix_identity::Identity;
 use actix_web::{
     get,
@@ -34,25 +35,14 @@ use actix_web::{
     HttpRequest, HttpResponse, Responder,
 };
 use async_sqlite::Pool;
-use error::WebuiError;
-use tcloud_library::error::ErrToResponse;
 
 #[get("")]
 pub async fn root(req: HttpRequest, pool: web::Data<Pool>, user: Option<Identity>) -> impl Responder {
+    let pool = pool.into_inner();
     if let Some(user) = user {
-        match user.id() {
-            Ok(username) => {
-                let pool = pool.into_inner();
-                let is_admin = match database::auth::is_admin(&pool, username.clone())
-                    .await
-                    .map_err(Into::<WebuiError>::into)
-                {
-                    Ok(is_admin) => is_admin.unwrap_or(false),
-                    Err(e) => return e.to_response(),
-                };
-                HttpResponse::Ok().body(home::page(username, is_admin).await)
-            }
-            Err(e) => utils::id_err_into(e),
+        match validate_user(&pool, user).await {
+            Ok((username, is_admin)) => HttpResponse::Ok().body(home::page(username, is_admin).await),
+            Err(e) => error::to_response_page(e),
         }
     } else {
         Redirect::to(utils::make_url("/ui/login"))
@@ -84,6 +74,22 @@ pub async fn login_page(req: HttpRequest, user: Option<Identity>) -> impl Respon
         HttpResponse::Ok().body(login::page())
     } else {
         Redirect::to(utils::make_url("/ui"))
+            .see_other()
+            .respond_to(&req)
+            .map_into_boxed_body()
+    }
+}
+
+#[get("/settings")]
+pub async fn settings_page(req: HttpRequest, pool: web::Data<Pool>, user: Option<Identity>) -> impl Responder {
+    let pool = pool.into_inner();
+    if let Some(user) = user {
+        match validate_user(&pool, user).await {
+            Ok((username, is_admin)) => HttpResponse::Ok().body(settings::page(username, is_admin)),
+            Err(e) => error::to_response_page(e),
+        }
+    } else {
+        Redirect::to(utils::make_url("/ui/login"))
             .see_other()
             .respond_to(&req)
             .map_into_boxed_body()

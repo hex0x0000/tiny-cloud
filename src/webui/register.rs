@@ -20,56 +20,7 @@
 // Email: hex0x0000@protonmail.com
 
 use crate::{config, utils, webfile};
-use maud::{html, Markup, PreEscaped, DOCTYPE};
-use std::sync::LazyLock;
-
-#[cfg(not(feature = "totp-auth"))]
-const REGISTER_JS: PreEscaped<&str> = webfile!("register.js");
-
-#[cfg(feature = "totp-auth")]
-const REGISTER_JS: PreEscaped<&str> = webfile!("register_totp.js");
-
-#[cfg(not(feature = "totp-auth"))]
-pub static FORM: LazyLock<Markup> = LazyLock::new(|| {
-    html! {
-        form id="register" name="register" {
-            br; label for="user" { "Username:" }
-            br; input type="text" id="user" name="user";
-            br; label for="password" { "Password:" }
-            br; input type="password" id="password" name="password";
-            br; label for="password_rep" { "Repeat Password:" }
-            br; input type="password" id="password_rep" name="password_rep";
-            br; label for="token" { "Registration Token:" }
-            br; input type="text" id="token" name="token";
-            input value="Register" type="submit" id="btn";
-        }
-    }
-});
-
-#[cfg(feature = "totp-auth")]
-pub static FORM: LazyLock<Markup> = LazyLock::new(|| {
-    html! {
-        form id="register" name="register" {
-            br; label for="user" { "Username:" }
-            br; input type="text" id="user" name="user";
-            br; label for="password" { "Password:" }
-            br; input type="password" id="password" name="password";
-            br; label for="password_rep" { "Repeat Password:" }
-            br; input type="password" id="password_rep" name="password_rep";
-            br; label for="token" { "Registration Token:" }
-            br; input type="text" id="token" name="token";
-            br; label for="totp_as_qr" { "Show TOTP as a QR Code?" }
-            input type="checkbox" id="totp_as_qr" name="totp_as_qr";
-            br; input value="Register" type="submit" id="btn";
-        }
-        div id="totp" hidden {
-            br; img id="totp-qr" hidden;
-            div id="totp-url" {}
-            p { "Save this in your TOTP app. You won't be able to access to it anymore after you click Continue." }
-            button type="button" id="continue" { "Continue" }
-        }
-    }
-});
+use maud::{html, PreEscaped, DOCTYPE};
 
 pub fn page() -> String {
     html! {
@@ -78,18 +29,37 @@ pub fn page() -> String {
             head {
                 title { "Registration Page" }
                 meta name="application-name" content=(config!(server_name));
-                meta charset="utf-8";
+                meta charset="UTF-8";
                 meta name="viewport" content="width=device-width, initial-scale=1.0";
                 meta name="tcloud-prefix" content=(config!(url_prefix));
                 link rel="icon" type="image/x-icon" href=(utils::make_url("/static/favicon.ico"));
-                script type="text/javascript" { (webfile!("global.js")) (REGISTER_JS) }
+                script type="text/javascript" { (webfile!("global.js")) (webfile!("register.js")) }
                 style { (webfile!("global.css")) (webfile!("register.css")) }
             }
             body {
                 p; div id="title" { (config!(server_name)) }
                 p; div id="version" { (env!("CARGO_PKG_VERSION")) }
                 p; div id="description" { (config!(description)) }
-                (*FORM)
+                form id="register" name="register" {
+                    br; label for="user" { "Username:" }
+                    br; input type="text" id="user" name="user";
+                    br; label for="password" { "Password:" }
+                    br; input type="password" id="password" name="password";
+                    br; label for="password_rep" { "Repeat Password:" }
+                    br; input type="password" id="password_rep" name="password_rep";
+                    br; label for="token" { "Registration Token:" }
+                    br; input type="text" id="token" name="token";
+                    br; label for="totp_as_qr" { "Show TOTP as a QR Code?" }
+                    input type="checkbox" id="totp_as_qr" name="totp_as_qr";
+                    br; input value="Register" type="submit" id="btn";
+                }
+                div id="totp" hidden {
+                    br; img id="totp-qr" hidden;
+                    div id="totp-url" {}
+                    p { "Save this in your TOTP app." }
+                    button type="button" id="continue" { "Continue" }
+                }
+
                 div id="msg" {}
                 footer {
                     br; "Tiny Cloud is licensed under the GNU Affero General Public License v3.0 or later"

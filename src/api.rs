@@ -19,8 +19,6 @@
 //
 // Email: hex0x0000@protonmail.com
 
-#[macro_use]
-mod macros;
 pub mod auth;
 pub mod plugins;
 pub mod token;

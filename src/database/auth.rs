@@ -21,73 +21,46 @@
 
 use super::error::DBError;
 use async_sqlite::{
-    rusqlite::{self, named_params, ErrorCode, OptionalExtension},
+    rusqlite::{self, named_params, params, ErrorCode, OptionalExtension},
     Error, Pool,
 };
 
 /// Authentication data of a user.
 #[non_exhaustive]
 pub struct UserAuth {
+    /// Username and id used as session identity. Formatted as "USERNAME:ID"
+    pub userid: String,
     /// Password's hash of the user.
     pub pass_hash: String,
     /// TOTP secret of the user. Enabled only with feature "totp-auth".
-    #[cfg(feature = "totp-auth")]
     pub totp: String,
 }
 
-#[cfg(not(feature = "totp-auth"))]
 pub const USERS_TABLE: &str = "CREATE TABLE IF NOT EXISTS users (
-    id          INTEGER PRIMARY KEY,
-    username    TEXT    NOT NULL,
-    pass_hash   TEXT    NOT NULL,
-    is_admin    INT     DEFAULT 0,
-    UNIQUE(username)
-)";
-
-#[cfg(feature = "totp-auth")]
-pub const USERS_TABLE: &str = "
-CREATE TABLE IF NOT EXISTS users (
-    id          INTEGER PRIMARY KEY,
-    username    TEXT    NOT NULL,
+    id          BIGINT  UNIQUE PRIMARY KEY,
+    username    TEXT    UNIQUE NOT NULL,
     pass_hash   TEXT    NOT NULL,
     totp        TEXT    NOT NULL,
-    is_admin    INTEGER DEFAULT 0,
-    UNIQUE(username)
+    is_admin    INTEGER DEFAULT 0
 )";
 
-#[cfg(not(feature = "totp-auth"))]
-const INSERT_USER: &str = "INSERT INTO users (username, pass_hash, is_admin) VALUES (:username, :pass_hash, :is_admin)";
+const INSERT_USER: &str =
+    "INSERT INTO users (id, username, pass_hash, totp, is_admin) VALUES (:id, :username, :pass_hash, :totp, :is_admin)";
 
-#[cfg(feature = "totp-auth")]
-const INSERT_USER: &str = "INSERT INTO users (username, pass_hash, totp, is_admin) VALUES (:username, :pass_hash, :totp, :is_admin)";
-
-#[cfg(not(feature = "totp-auth"))]
-const GET_USER_AUTH: &str = "SELECT pass_hash FROM users WHERE username=?1";
-
-#[cfg(feature = "totp-auth")]
-const GET_USER_AUTH: &str = "SELECT pass_hash, totp FROM users WHERE username=?1";
+const GET_USER_AUTH: &str = "SELECT id, username, pass_hash, totp FROM users WHERE username=?1";
 
 /// Adds a new user to the database, fails if it already exists.
-/// If TOTP feature is enabled, it requires the totp-secret to be inserted
-pub async fn add_user(
-    pool: &Pool,
-    username: String,
-    pass_hash: String,
-    #[cfg(feature = "totp-auth")] totp: String,
-    is_admin: bool,
-) -> Result<(), DBError> {
+/// If TOTP feature is enabled, it requires the totp-secret to be inserted.
+/// Returns a string containing the username and the id of the user. It is used as the identifier
+/// during a session. Formatted as "USERNAME:ID".
+pub async fn add_user(pool: &Pool, username: String, pass_hash: String, totp: String, is_admin: bool) -> Result<String, DBError> {
     let username_clone = username.clone();
+    let id: i64 = i64::abs(rand::random());
     pool.conn(move |conn| {
         conn.execute(
             INSERT_USER,
-            #[cfg(not(feature = "totp-auth"))]
             named_params! {
-                ":username": username_clone,
-                ":pass_hash": pass_hash,
-                ":is_admin": is_admin,
-            },
-            #[cfg(feature = "totp-auth")]
-            named_params! {
+                ":id": id,
                 ":username": username_clone,
                 ":pass_hash": pass_hash,
                 ":totp": totp,
@@ -109,7 +82,7 @@ pub async fn add_user(
     log::info!("Added a new user: '{username}'");
     super::create_user_dir(&username).await?;
     log::info!("Created new user dir for '{username}'");
-    Ok(())
+    Ok(format!("{username}:{id}"))
 }
 
 /// Returns a user's authentication data as a [`UserAuth`].
@@ -117,9 +90,9 @@ pub async fn get_auth(pool: &Pool, username: String) -> Result<Option<UserAuth>,
     pool.conn(|conn| {
         conn.query_row(GET_USER_AUTH, [username], |row| {
             Ok(UserAuth {
-                pass_hash: row.get(0)?,
-                #[cfg(feature = "totp-auth")]
-                totp: row.get(1)?,
+                userid: format!("{}:{}", row.get::<usize, String>(1)?, row.get::<usize, i64>(0)?),
+                pass_hash: row.get(2)?,
+                totp: row.get(3)?,
             })
         })
         .optional()
@@ -128,11 +101,23 @@ pub async fn get_auth(pool: &Pool, username: String) -> Result<Option<UserAuth>,
     .map_err(|e| DBError::ExecError(format!("Failed to get user: {e}")))
 }
 
-/// Returns whether or not a user is an admin. If the user does not exist returns [`None`].
-pub async fn is_admin(pool: &Pool, username: String) -> Result<Option<bool>, DBError> {
-    pool.conn(|conn| {
-        conn.query_row("SELECT is_admin FROM users WHERE username=?1", [username], |row| row.get(0))
-            .optional()
+/// Unpacks the userid into the username and the id.
+fn unpack(userid: String) -> Result<(i64, String), ()> {
+    let split: Vec<&str> = userid.split(':').collect();
+    Ok((split[1].parse().map_err(|_| ())?, split[0].into()))
+}
+
+/// Returns username and user admin status from userid.
+/// If the userid is not valid returns [`None`].
+pub async fn userinfo(pool: &Pool, userid: String) -> Result<Option<(String, bool)>, DBError> {
+    let (id, username) = unpack(userid).map_err(|_| DBError::InvalidUserID)?;
+    pool.conn(move |conn| {
+        conn.query_row(
+            "SELECT username, is_admin FROM users WHERE id=?1 AND username=?2",
+            params![id, username],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
     })
     .await
     .map_err(|e| DBError::ExecError(format!("Failed to get user: {e}")))
@@ -153,14 +138,15 @@ pub async fn get_all_usernames(pool: &Pool) -> Result<Vec<String>, DBError> {
     .map_err(|e| DBError::ExecError(format!("Failed to get user: {e}")))
 }
 
-/// Deletes a user from database
-pub async fn delete_user(pool: &Pool, username: String) -> Result<(), DBError> {
-    let username_clone = username.clone();
-    pool.conn(move |conn| conn.execute("DELETE FROM users WHERE username=?1", [username_clone]))
+/// Deletes user from database and all of its
+pub async fn delete_user(pool: &Pool, userid: String) -> Result<(), DBError> {
+    let (id, username) = unpack(userid).map_err(|_| DBError::InvalidUserID)?;
+    let user = username.clone();
+    pool.conn(move |conn| conn.execute("DELETE FROM users WHERE id=?1 AND username=?2", params![id, username]))
         .await
-        .map_err(|e| DBError::ExecError(format!("Failed to delete user: {e}")))?;
-    log::info!("Deleted user '{username}'");
-    super::delete_user_dir(&username).await?;
-    log::info!("Deleted user directory of '{username}'");
+        .map_err(|e| DBError::ExecError(format!("Failed to delete user '{user}': {e}")))?;
+    log::info!("Deleted user '{user}'");
+    super::delete_user_dir(&user).await?;
+    log::info!("Deleted user directory of '{user}'");
     Ok(())
 }

@@ -19,39 +19,39 @@
 //
 // Email: hex0x0000@protonmail.com
 
-use actix_web::{HttpResponse, HttpResponseBuilder};
+use crate::{config, utils, webfile};
+use actix_web::HttpResponse;
+use maud::{html, PreEscaped, DOCTYPE};
 use tcloud_library::error::ErrToResponse;
-use thiserror::Error;
 
-#[derive(Error, Debug)]
-pub enum WebuiError {
-    #[error("An internal error occurred")]
-    InternalError(String),
+fn to_page<E: ErrToResponse>(err: E, code: u16) -> String {
+    html! {
+        (DOCTYPE)
+        html lang="en-US" {
+            head {
+                title { "Home Page" }
+                meta name="application-name" content=(config!(server_name));
+                meta charset="UTF-8";
+                meta name="tcloud-prefix" content=(config!(url_prefix));
+                meta name="viewport" content="width=device-width, initial-scale=1.0";
+                link rel="icon" type="image/x-icon" href=(utils::make_url("/static/favicon.ico"));
+                style {
+                    (webfile!("global.css"))
+                    (webfile!("error.css"))
+                }
+            }
+            body {
+                h1 { "Uh Oh :(" }
+                p id="name" { "An error occurred: " strong { (err.error()) } }
+                p id="msg" { (err.msg()) }
+                img src=(format!("https://http.cat/{code}")) alt=(format!("HTTP Code {code}")) width="530" height="424";
+            }
+        }
+    }
+    .into()
 }
 
-impl ErrToResponse for WebuiError {
-    fn error(&self) -> &'static str {
-        "WebuiError"
-    }
-
-    fn err_type(&self) -> &'static str {
-        match self {
-            Self::InternalError(_) => stringify!(InternalError),
-        }
-    }
-
-    fn msg(&self) -> String {
-        self.to_string()
-    }
-
-    fn http_code(&self) -> HttpResponseBuilder {
-        match self {
-            Self::InternalError(_) => HttpResponse::InternalServerError(),
-        }
-    }
-
-    fn handle(&self) {
-        let Self::InternalError(err) = self;
-        log::error!("An internal server error occurred while handling token: {err}");
-    }
+pub fn to_response_page<E: ErrToResponse>(err: E) -> HttpResponse {
+    let code = err.http_code().finish().status().as_u16();
+    err.http_code().body(to_page(err, code))
 }

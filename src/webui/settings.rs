@@ -22,7 +22,7 @@
 use crate::{config, utils, webfile};
 use maud::{html, PreEscaped, DOCTYPE};
 
-pub fn page() -> String {
+pub fn page(username: String, is_admin: bool) -> String {
     html! {
         (DOCTYPE)
         html lang="en-US" {
@@ -33,30 +33,23 @@ pub fn page() -> String {
                 meta name="viewport" content="width=device-width, initial-scale=1.0";
                 meta name="tcloud-prefix" content=(config!(url_prefix));
                 link rel="icon" type="image/x-icon" href=(utils::make_url("/static/favicon.ico"));
-                script type="text/javascript" { (webfile!("global.js")) (webfile!("login.js")) }
-                style { (webfile!("global.css")) (webfile!("login.css")) }
+                script type="text/javascript" { (webfile!("global.js")) (webfile!("settings.js")) }
+                style { (webfile!("global.css")) }
             }
             body {
-                p; div id="title" { (config!(server_name)) }
-                p; div id="version" { (env!("CARGO_PKG_VERSION")) }
-                p; div id="description" { (config!(description)) }
-                form id="login" name="login" {
-                    br; label for="user" { "Username:" }
-                    br; input type="text" id="user" name="user";
-                    br; label for="password" { "Password:" }
-                    br; input type="password" id="password" name="password";
-                    br; label for="totp" { "TOTP Token:" }
-                    br; input type="totp" id="totp" name="totp";
-                    br; input value="Login" type="submit" id="btn";
+                div id="titlebar" {
+                    h3 id="home" { a href=(utils::make_url("/ui")) { "Home" } }
+                    h1 id="title" { "Settings" }
                 }
-                div id="msg" {}
-                @if config!(registration).is_some() {
-                    p id="reglink" { a href=(utils::make_url("/ui/register")) { "Register Here" } }
+                div id="tabs" {
+                    button type="button" class="tab" { "Account" }
+                    @if is_admin {
+                        button type="button" class="tab" { "Tokens" }
+                    }
                 }
-                footer {
-                    br; "Tiny Cloud is licensed under the GNU Affero General Public License v3.0 or later"
-                    br; a href=(env!("CARGO_PKG_REPOSITORY")) { "You can find the source code here." }
-                }
+                button type="button" id="logout" { "Log Out" }
+                button type="button" id="delete" { "Delete Account" }
+                button type="button" id="totp" { "Regenerate TOTP" }
             }
         }
     }

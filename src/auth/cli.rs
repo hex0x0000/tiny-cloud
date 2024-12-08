@@ -24,57 +24,6 @@ use async_sqlite::Pool;
 use std::io::{self, Write};
 use zeroize::{Zeroize, Zeroizing};
 
-#[cfg(not(feature = "totp-auth"))]
-pub async fn create_user(pool: &Pool) -> Result<(), String> {
-    let mut input = String::new();
-
-    // Gets user from CLI
-    print!("User: ");
-    io::stdout().flush().unwrap();
-    io::stdin().read_line(&mut input).expect("Failed to read user");
-    let user = input.trim().to_string();
-
-    // Gets password from CLI using a safe input
-    let password = {
-        let first = rpassword::prompt_password("Password: ")
-            .expect("Failed to read password")
-            .into_bytes();
-        let mut second = rpassword::prompt_password("Confirm password: ")
-            .expect("Confirm password")
-            .into_bytes();
-        if first != second {
-            second.zeroize();
-            return Err("Passwords do not match.".into());
-        } else {
-            second.zeroize();
-            Zeroizing::new(first)
-        }
-    };
-    let pass_len = password.len();
-
-    // Make user admin?
-    print!("Make user admin? [y/n] ");
-    io::stdout().flush().unwrap();
-    input.clear();
-    io::stdin().read_line(&mut input).expect("Failed to read admin request");
-    let is_admin = input.trim().to_string().to_lowercase() == "y";
-
-    // Add user to DB
-    add_user(&pool, user.clone(), password, is_admin).await.map_err(|e| match e {
-        AuthError::InvalidRegCredentials => format!("{e}"),
-        AuthError::InternalError(ref err) => format!("{e}: {err}"),
-        _ => e.to_string(),
-    })?;
-
-    if is_admin {
-        println!("Successfully added admin {} with password length {}", user, pass_len);
-    } else {
-        println!("Successfully added user {} with password length {}", user, pass_len);
-    }
-    Ok(())
-}
-
-#[cfg(feature = "totp-auth")]
 pub async fn create_user(pool: &Pool) -> Result<(), String> {
     use std::{fs::File, path::PathBuf};
 

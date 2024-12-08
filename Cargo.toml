@@ -8,7 +8,7 @@ version = "0.0.1"
 edition = "2021"
 
 [features]
-default = [ "totp-auth", "openssl", "archive" ]
+default = [ "openssl", "archive" ]
 
 # Logging
 syslog = [ "tiny-logs/syslog" ]
@@ -20,9 +20,6 @@ rustls = [ "dep:rustls-pemfile", "dep:rustls", "actix-web/rustls-0_23" ]
 
 # Database
 sqlite-bundled = [ "async-sqlite/bundled" ]
-
-# Authentication
-totp-auth = [ "dep:totp-rs" ]
 
 # Plugins
 archive = [ "dep:tcloud-archive" ]
@@ -58,7 +55,7 @@ rustls = { version = "0.23", optional = true }
 rustls-pemfile = { version = "2", optional = true }
 
 # Authentication
-totp-rs = { version = "5.5", features = [ "qr", "otpauth" ], optional = true }
+totp-rs = { version = "5.5", features = [ "qr", "otpauth" ] }
 
 # Plugins
 #tcloud-archive = { git = "https://github.com/personal-tiny-cloud/tcloud-archive", tag = "0.0.2", optional = true }

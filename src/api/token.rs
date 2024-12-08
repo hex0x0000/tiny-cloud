@@ -19,10 +19,10 @@
 //
 // Email: hex0x0000@protonmail.com
 
+use crate::auth::validate_user;
 use crate::config;
 use crate::database;
 use crate::token::{self, error::TokenError};
-use actix_identity::error::GetIdentityError;
 use actix_identity::Identity;
 use actix_web::{get, post, web, HttpResponse, Responder};
 use async_sqlite::Pool;
@@ -42,18 +42,12 @@ struct TokenInfo {
     token: Option<String>,
 }
 
-async fn check_admin(pool: &Pool, username: String) -> Result<(), HttpResponse> {
-    if let Some(is_admin) = database::auth::is_admin(pool, username)
-        .await
-        .map_err(|e| Into::<TokenError>::into(e).to_response())?
-    {
-        if is_admin {
-            Ok(())
-        } else {
-            Err(HttpResponse::Forbidden().body(""))
-        }
-    } else {
-        Err(HttpResponse::Forbidden().body(""))
+#[inline]
+async fn is_admin(pool: &Pool, user: Identity) -> Result<(), HttpResponse> {
+    match validate_user(pool, user).await {
+        Ok((_, is_admin)) if is_admin => Ok(()),
+        Ok(_) => Err(HttpResponse::Forbidden().body("")),
+        Err(e) => Err(e.to_response()),
     }
 }
 
@@ -62,8 +56,7 @@ async fn check_admin(pool: &Pool, username: String) -> Result<(), HttpResponse> 
 pub async fn new(user: Identity, pool: web::Data<Pool>, info: web::Json<NewToken>) -> impl Responder {
     if let Some(registration) = config!(registration) {
         let pool = pool.into_inner();
-        let username = get_user!(user.id());
-        if let Err(e) = check_admin(&pool, username).await {
+        if let Err(e) = is_admin(&pool, user).await {
             return e;
         }
         match database::token::create_token(&pool, registration, info.into_inner().duration).await {
@@ -80,10 +73,9 @@ pub async fn new(user: Identity, pool: web::Data<Pool>, info: web::Json<NewToken
 #[post("/delete")]
 pub async fn delete(user: Identity, pool: web::Data<Pool>, token: web::Json<TokenInfo>) -> impl Responder {
     if config!(registration).is_some() {
-        let username = get_user!(user.id());
         let pool = pool.into_inner();
         let token = token.into_inner();
-        if let Err(e) = check_admin(&pool, username).await {
+        if let Err(e) = is_admin(&pool, user).await {
             return e;
         }
         if let Err(e) = token::remove_token(&pool, token.id, token.token).await {
@@ -99,9 +91,8 @@ pub async fn delete(user: Identity, pool: web::Data<Pool>, token: web::Json<Toke
 #[get("/list")]
 pub async fn list(user: Identity, pool: web::Data<Pool>) -> impl Responder {
     if config!(registration).is_some() {
-        let username = get_user!(user.id());
         let pool = pool.into_inner();
-        if let Err(e) = check_admin(&pool, username).await {
+        if let Err(e) = is_admin(&pool, user).await {
             return e;
         }
         match token::get_all_tokens(&pool).await {

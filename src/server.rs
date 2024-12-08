@@ -103,7 +103,8 @@ pub async fn start(secret_key: Key, database: Pool, plugins: Plugins) -> Result<
                 web::scope(&utils::make_url("/ui"))
                     .service(webui::root)
                     .service(webui::register_page)
-                    .service(webui::login_page),
+                    .service(webui::login_page)
+                    .service(webui::settings_page),
             )
             .service(
                 web::scope(&utils::make_url("/api"))

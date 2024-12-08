@@ -25,27 +25,12 @@ use actix_web::{post, web, Responder};
 use async_sqlite::Pool;
 use tcloud_library::{error::ErrToResponse, plugin::User, Json};
 
-use crate::{
-    database,
-    plugins::{error::PluginError, Plugins},
-    utils,
-};
+use crate::{auth::validate_user, plugins::Plugins};
 
 #[derive(MultipartForm)]
 pub struct FileForm {
     pub file: TempFile,
     pub info: MpJson<Json>,
-}
-
-async fn is_admin(pool: &Pool, username: &str) -> Result<bool, PluginError> {
-    if let Some(is_admin) = database::auth::is_admin(pool, username.to_string())
-        .await
-        .map_err(Into::<PluginError>::into)?
-    {
-        Ok(is_admin)
-    } else {
-        Err(PluginError::InternalError(format!("User '{username}' not found in DB")))
-    }
 }
 
 /// Handles plugins
@@ -57,24 +42,21 @@ pub async fn handler(
     plugins: web::Data<Plugins>,
     user: Option<Identity>,
 ) -> impl Responder {
-    log::info!("a");
     let pool = pool.into_inner();
     let plugin = plugin.into_inner();
     let plugins = plugins.into_inner();
     let body = body.into_inner();
     let user: Option<User> = match user {
-        Some(user) => match user.id() {
-            Ok(name) => match is_admin(&pool, &name).await {
-                Ok(is_admin) => Some(User { name, is_admin }),
-                Err(e) => return e.to_response(),
-            },
-            Err(err) => return utils::id_err_into(err),
+        Some(user) => match validate_user(&pool, user).await {
+            Ok((username, is_admin)) => Some(User { name: username, is_admin }),
+            Err(e) => return e.to_response(),
         },
         None => None,
     };
     plugins.request(plugin, user, body).await
 }
 
+/// Handles file uploading for plugins
 #[post("/up/{plugin}")]
 pub async fn file(
     pool: web::Data<Pool>,
@@ -87,12 +69,9 @@ pub async fn file(
     let plugin = plugin.into_inner();
     let plugins = plugins.into_inner();
     let user: Option<User> = match user {
-        Some(user) => match user.id() {
-            Ok(name) => match is_admin(&pool, &name).await {
-                Ok(is_admin) => Some(User { name, is_admin }),
-                Err(e) => return e.to_response(),
-            },
-            Err(err) => return utils::id_err_into(err),
+        Some(user) => match validate_user(&pool, user).await {
+            Ok((username, is_admin)) => Some(User { name: username, is_admin }),
+            Err(e) => return e.to_response(),
         },
         None => None,
     };

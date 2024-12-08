@@ -64,6 +64,7 @@ impl Plugins {
         false
     }
 
+    /// Default plugins' configs, will appear in the default config file
     pub fn default_configs(&self) -> Table {
         let mut table = Table::new();
         for (name, plugin) in &self.plugins {
@@ -74,6 +75,7 @@ impl Plugins {
         table
     }
 
+    /// Initializes all the plugins
     pub fn init(&mut self, config: &Table) -> Result<(), String> {
         for (name, plugin) in &mut self.plugins {
             plugin.init(config.get(name))?;

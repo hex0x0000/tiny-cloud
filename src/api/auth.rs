@@ -24,7 +24,6 @@ use crate::{
     config,
     utils::{get_ip, sanitize_user},
 };
-use actix_identity::error::GetIdentityError;
 use actix_identity::Identity;
 use actix_web::{dev::ConnectionInfo, get, post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
 use async_sqlite::Pool;
@@ -38,7 +37,6 @@ use zeroize::Zeroizing;
 pub struct Login {
     pub user: String,
     pub password: String,
-    #[cfg(feature = "totp-auth")]
     pub totp: String,
 }
 
@@ -48,48 +46,11 @@ pub struct Register {
     user: String,
     password: String,
     token: String,
-    #[cfg(feature = "totp-auth")]
     totp_as_qr: bool,
-}
-
-/// Registers new user and starts a new session
-#[cfg(not(feature = "totp-auth"))]
-#[post("/register")]
-pub async fn register(
-    req: HttpRequest,
-    conn: ConnectionInfo,
-    credentials: web::Json<Register>,
-    pool: web::Data<Pool>,
-) -> impl Responder {
-    if config!(registration).is_some() {
-        let credentials = credentials.into_inner();
-        let password = Zeroizing::new(credentials.password.into_bytes());
-        let pool = pool.into_inner();
-        match auth::register_user(&pool, credentials.user.clone(), password, credentials.token).await {
-            Ok(_) => {
-                if let Err(err) = Identity::login(&req.extensions(), credentials.user.clone()) {
-                    return AuthError::InternalError(format!("Failed to build identity during registration: {err}")).to_response();
-                }
-                log::warn!("client [{}] registered as `{}`", get_ip(&conn), sanitize_user(&credentials.user));
-                HttpResponse::Ok().body("")
-            }
-            Err(err) => {
-                log::warn!(
-                    "client [{}] tried to register as `{}`",
-                    get_ip(&conn),
-                    sanitize_user(&credentials.user)
-                );
-                err.to_response()
-            }
-        }
-    } else {
-        HttpResponse::NotFound().body("")
-    }
 }
 
 /// Registers new user and starts a new session.
 /// Returns the TOTP as a url or qr code depending on the request
-#[cfg(feature = "totp-auth")]
 #[post("/register")]
 pub async fn register(
     req: HttpRequest,
@@ -104,11 +65,11 @@ pub async fn register(
         let password = Zeroizing::new(credentials.password.into_bytes());
         let pool = pool.into_inner();
         match auth::register_user(&pool, credentials.user.clone(), password, credentials.token).await {
-            Ok(totp) => {
-                if let Err(err) = Identity::login(&req.extensions(), credentials.user.clone()) {
+            Ok((totp, userid)) => {
+                log::warn!("client [{}] registered as `{}`", get_ip(&conn), sanitize_user(&credentials.user));
+                if let Err(err) = Identity::login(&req.extensions(), userid) {
                     return AuthError::InternalError(format!("Failed to build identity during registration: {err}")).to_response();
                 }
-                log::warn!("client [{}] registered as `{}`", get_ip(&conn), sanitize_user(&credentials.user));
                 let mut resp = HttpResponse::Ok();
                 resp.content_type("application/json");
                 if credentials.totp_as_qr {
@@ -164,10 +125,8 @@ pub async fn logout(user: Identity) -> impl Responder {
 // Deletes an user's own account
 #[get("/delete")]
 pub async fn delete(user: Identity, pool: web::Data<Pool>) -> impl Responder {
-    let username = get_user!(user.id());
     let pool = pool.into_inner();
-    user.logout();
-    if let Err(err) = auth::delete_user(&pool, username).await {
+    if let Err(err) = auth::delete_user(&pool, user).await {
         err.to_response()
     } else {
         HttpResponse::Ok().body("")

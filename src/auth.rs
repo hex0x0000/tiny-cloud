@@ -22,18 +22,17 @@
 pub mod cli;
 pub mod error;
 mod hash;
-#[cfg(feature = "totp-auth")]
 mod totp;
 
 use crate::api::auth::Login;
 use crate::config;
-use crate::database;
+use crate::database::auth;
 use crate::token::check_token;
+use actix_identity::error::GetIdentityError;
+use actix_identity::Identity;
 use async_sqlite::Pool;
-use database::auth;
 use error::AuthError;
 use tcloud_library::error::ErrToResponse;
-#[cfg(feature = "totp-auth")]
 use totp_rs::TOTP;
 use zeroize::Zeroizing;
 
@@ -56,35 +55,14 @@ fn check_validity(username: &str, password: &[u8]) -> Result<(), AuthError> {
     }
     for c in username.chars() {
         if !c.is_alphanumeric() {
-            return Err(AuthError::BadCredentials("Username must be alphanumerical".into()));
+            return Err(AuthError::BadCredentials("Username must be alphanumeric".into()));
         }
     }
     Ok(())
 }
 
-/// Checks a user's password
-#[cfg(not(feature = "totp-auth"))]
-pub async fn check(pool: &Pool, login: Login) -> Result<String, AuthError> {
-    let password = Zeroizing::new(login.password.into_bytes());
-    check_validity(&login.user, &password)?;
-    let dummy_hash = hash::create(password.clone()).await?;
-    match auth::get_auth(pool, login.user.clone()).await.map_err(|e| e.into())? {
-        Some(user) => {
-            hash::verify(password, user.pass_hash).await?;
-            Ok(login.user)
-        }
-        None => {
-            // Dummy verification to keep the same response timings when the user is not found.
-            // Keeps malicious attackers from scanning the server for usernames
-            let _ = hash::verify(password, dummy_hash).await;
-            Err(AuthError::InvalidCredentials)
-        }
-    }
-}
-
 /// Checks a user's password and validates the TOTP token.
 /// Returns user's username on success.
-#[cfg(feature = "totp-auth")]
 pub async fn check(pool: &Pool, login: Login) -> Result<String, AuthError> {
     let password = Zeroizing::new(login.password.into_bytes());
     check_validity(&login.user, &password)?;
@@ -93,7 +71,7 @@ pub async fn check(pool: &Pool, login: Login) -> Result<String, AuthError> {
         Some(user) => {
             hash::verify(password, user.pass_hash).await?;
             self::totp::check(user.totp, login.totp)?;
-            Ok(login.user)
+            Ok(user.userid)
         }
         None => {
             // Dummy verification to keep the same response timings when the user is not found.
@@ -104,35 +82,8 @@ pub async fn check(pool: &Pool, login: Login) -> Result<String, AuthError> {
     }
 }
 
-/// Adds a new user. Fails if username already exists
-#[cfg(not(feature = "totp-auth"))]
-pub async fn add_user(pool: &Pool, username: String, password: Zeroizing<Vec<u8>>, is_admin: bool) -> Result<(), AuthError> {
-    check_validity(&username, &password)?;
-    let passwd_hash = hash::create(password).await?;
-    auth::add_user(pool, username, passwd_hash, is_admin).await.map_err(|e| e.into())?;
-    Ok(())
-}
-
-/// Registers a new user with a token.
-/// Fails if username already exists or if token is not valid
-#[cfg(not(feature = "totp-auth"))]
-pub async fn register_user(
-    pool: &Pool,
-    username: String,
-    password: Zeroizing<Vec<u8>>,
-    token: String,
-) -> Result<(), Box<dyn ErrToResponse>> {
-    check_validity(&username, &password).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
-    check_token(pool, token).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
-    let passwd_hash = hash::create(password).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
-    auth::add_user(pool, username, passwd_hash, false)
-        .await
-        .map_err(|e| Box::new(Into::<AuthError>::into(e)) as Box<dyn ErrToResponse>)?;
-    Ok(())
-}
-
-/// Adds a new user and returns its TOTP. Fails if username already exists
-#[cfg(feature = "totp-auth")]
+/// Adds a new user and returns its TOTP. Fails if username already exists.
+/// Used when adding user manually.
 pub async fn add_user(pool: &Pool, username: String, password: Zeroizing<Vec<u8>>, is_admin: bool) -> Result<TOTP, AuthError> {
     check_validity(&username, &password)?;
     let passwd_hash = hash::create(password).await?;
@@ -143,26 +94,53 @@ pub async fn add_user(pool: &Pool, username: String, password: Zeroizing<Vec<u8>
     Ok(totp)
 }
 
-/// Registers a new user with a token and returns its TOTP.
+/// Registers a new user with a token and returns its TOTP, and returns the userid used during the
+/// session.
 /// Fails if username already exists or if token is not valid
-#[cfg(feature = "totp-auth")]
 pub async fn register_user(
     pool: &Pool,
     username: String,
     password: Zeroizing<Vec<u8>>,
     token: String,
-) -> Result<TOTP, Box<dyn ErrToResponse>> {
+) -> Result<(TOTP, String), Box<dyn ErrToResponse>> {
     check_validity(&username, &password).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
     check_token(pool, token).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
     let passwd_hash = hash::create(password).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
     let totp = self::totp::gen(username.clone()).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
-    auth::add_user(pool, username, passwd_hash, totp.get_url(), false)
+    let userid = auth::add_user(pool, username, passwd_hash, totp.get_url(), false)
         .await
         .map_err(|e| Box::new(Into::<AuthError>::into(e)) as Box<dyn ErrToResponse>)?;
-    Ok(totp)
+    Ok((totp, userid))
 }
 
-pub async fn delete_user(pool: &Pool, username: String) -> Result<(), AuthError> {
-    auth::delete_user(pool, username).await.map_err(|e| e.into())?;
-    Ok(())
+/// Unwraps id and returns its string or its error as a response
+pub fn id_err_into(err: GetIdentityError) -> AuthError {
+    match err {
+        GetIdentityError::SessionGetError(err) => {
+            AuthError::InternalError(format!("Failed to accessing the session store while validating identity: {err}"))
+        }
+        GetIdentityError::LostIdentityError(err) => {
+            AuthError::InternalError(format!("Identity info was lost after being validated (Actix Identity bug): {err}"))
+        }
+        _ => AuthError::InvalidSession,
+    }
+}
+
+/// Deletes user and logs out
+pub async fn delete_user(pool: &Pool, user: Identity) -> Result<(), AuthError> {
+    auth::delete_user(pool, user.id().map_err(|e| id_err_into(e))?)
+        .await
+        .inspect(|_| user.logout())
+        .map_err(|e| e.into())
+}
+
+/// If the user is some, checks whether the userid is valid or not and returns
+/// Checks whether the userid is valid or not and returns the user's username and admin status,
+/// and if it is not valid it terminates the session.
+pub async fn validate_user(pool: &Pool, user: Identity) -> Result<(String, bool), AuthError> {
+    auth::userinfo(pool, user.id().map_err(|e| id_err_into(e))?)
+        .await
+        .map_err(|e| e.into())
+        .and_then(|userinfo| userinfo.ok_or(AuthError::InvalidSession))
+        .inspect_err(|_| user.logout())
 }

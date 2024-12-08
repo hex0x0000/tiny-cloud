@@ -36,6 +36,11 @@ async function submit() {
 		return;
 	}
 	delete form.password_rep;
+	if (form.totp_as_qr == 'on') {
+		form.totp_as_qr = true;
+	} else {
+		form.totp_as_qr = false;	
+	}
 	$('btn').disabled = true;
 	let response = await fetch(prefix + 'api/auth/register', {
 		method: 'POST',
@@ -60,7 +65,18 @@ async function submit() {
 			setErrorMsg('Unknown error... check logs if this persists');
 		}
 	} else {
-		window.location.reload();
+		let resp = await response.json();
+		setMsg('');
+		console.log(resp);
+		$('register').style.display = "none";
+		$('totp').hidden = false;
+		if (form.totp_as_qr) {
+			let img = $('totp-qr');
+			img.src = 'data:image/png;base64, ' + resp.totp_qr;
+			img.hidden = false;
+		} else {
+			$('totp-url').innerHTML = resp.totp_url;
+		}
 	}
 	$('btn').disabled = false;
 }
@@ -77,4 +93,8 @@ window.onload = function() {
 		}
 		return false;
 	};
+	$('continue').onclick = function(e) {
+		window.location.reload();
+	};
+	$('totp_as_qr').checked = true;
 }
