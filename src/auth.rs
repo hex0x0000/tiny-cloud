@@ -144,3 +144,12 @@ pub async fn validate_user(pool: &Pool, user: Identity) -> Result<(String, bool)
         .and_then(|userinfo| userinfo.ok_or(AuthError::InvalidSession))
         .inspect_err(|_| user.logout())
 }
+
+/// Changes user's sessionid. Logs out on success.
+#[inline]
+pub async fn change_sessionid(pool: &Pool, user: Identity) -> Result<(), AuthError> {
+    auth::change_sessionid(pool, user.id().map_err(|e| id_err_into(e))?)
+        .await
+        .map_err(|e| e.into())
+        .inspect(|_| user.logout())
+}

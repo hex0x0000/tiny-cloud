@@ -95,34 +95,38 @@ pub async fn start(secret_key: Key, database: Pool, plugins: Plugins) -> Result<
             })
             .service(web::redirect(utils::make_url(""), utils::make_url("/ui")))
             .service(
-                web::scope(&utils::make_url("/static"))
-                    .route("/favicon.ico", web::get().to(webui::images::favicon))
-                    .route("/logo.png", web::get().to(webui::images::logo)),
-            )
-            .service(
-                web::scope(&utils::make_url("/ui"))
-                    .service(webui::root)
-                    .service(webui::register_page)
-                    .service(webui::login_page)
-                    .service(webui::settings_page),
-            )
-            .service(
-                web::scope(&utils::make_url("/api"))
-                    .service(api::info)
-                    .service(api::plugins::handler)
-                    .service(api::plugins::file)
+                web::scope(config!(url_prefix))
                     .service(
-                        web::scope("/auth")
-                            .service(api::auth::login)
-                            .service(api::auth::register)
-                            .service(api::auth::logout)
-                            .service(api::auth::delete),
+                        web::scope("/static")
+                            .route("/favicon.ico", web::get().to(webui::images::favicon))
+                            .route("/logo.png", web::get().to(webui::images::logo)),
                     )
                     .service(
-                        web::scope("/token")
-                            .service(api::token::new)
-                            .service(api::token::delete)
-                            .service(api::token::list),
+                        web::scope("/ui")
+                            .service(webui::root)
+                            .service(webui::register_page)
+                            .service(webui::login_page)
+                            .service(webui::settings_page),
+                    )
+                    .service(
+                        web::scope("/api")
+                            .service(api::info)
+                            .service(api::plugins::handler)
+                            .service(api::plugins::file)
+                            .service(
+                                web::scope("/auth")
+                                    .service(api::auth::login)
+                                    .service(api::auth::register)
+                                    .service(api::auth::logout)
+                                    .service(api::auth::logoutall)
+                                    .service(api::auth::delete),
+                            )
+                            .service(
+                                web::scope("/token")
+                                    .service(api::token::new)
+                                    .service(api::token::delete)
+                                    .service(api::token::list),
+                            ),
                     ),
             )
     });

@@ -46,7 +46,7 @@ pub fn page() -> String {
                     br; label for="password" { "Password:" }
                     br; input type="password" id="password" name="password";
                     br; label for="totp" { "TOTP Token:" }
-                    br; input type="totp" id="totp" name="totp";
+                    br; input type="text" id="totp" name="totp";
                     br; input value="Login" type="submit" id="btn";
                 }
                 div id="msg" {}

@@ -22,18 +22,18 @@ rustls = [ "dep:rustls-pemfile", "dep:rustls", "actix-web/rustls-0_23" ]
 sqlite-bundled = [ "async-sqlite/bundled" ]
 
 # Plugins
-archive = [ "dep:tcloud-archive" ]
+archive = [ "dep:archive" ]
 
 [dependencies]
 tokio = { version = "1.29", features = [ "sync", "fs", "process" ] }
 actix-web = { version = "4", features = [ "secure-cookies" ] }
-actix-session = { version = "0.9.0", features = [ "cookie-session" ] } # 0.10 does not work for some reason, waiting for updates
-actix-identity = "0.7"
+actix-session = { version = "0.10", features = [ "cookie-session" ] }
+actix-identity = "0.8"
 actix-multipart = { version = "0.7", features = [ "tempfile" ] }
 maud = "0.26"
 serde = { version = "1.0", features = [ "derive" ] }
 num_cpus = "1"
-thiserror = "1"
+thiserror = "2"
 argon2 = "0.5"
 rand = "0.8"
 zeroize = { version = "1.6", features = [ "zeroize_derive" ] }
@@ -42,8 +42,7 @@ async-sqlite = { version = "0.3", default-features = false }
 mutually_exclusive_features = "0.1"
 
 # Common library
-#tcloud-library = { git = "https://github.com/personal-tiny-cloud/tcloud-library", tag = "0.0.2" }
-tcloud-library = { path = "../tcloud-library" }
+tcloud-library = { path = "plugins/common-library" }
 
 # Logging
 log = { version = "0.4", features = [ "release_max_level_info" ] }
@@ -58,8 +57,7 @@ rustls-pemfile = { version = "2", optional = true }
 totp-rs = { version = "5.5", features = [ "qr", "otpauth" ] }
 
 # Plugins
-#tcloud-archive = { git = "https://github.com/personal-tiny-cloud/tcloud-archive", tag = "0.0.2", optional = true }
-tcloud-archive = { path = "../tcloud-archive", optional = true }
+archive = { path = "plugins/archive", optional = true }
 
 [build-dependencies]
 tcloud-assets-include = { git = "https://github.com/personal-tiny-cloud/tcloud-assets-include", tag = "0.0.2" }

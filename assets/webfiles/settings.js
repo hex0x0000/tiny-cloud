@@ -48,6 +48,7 @@ async function send(type) {
 }
 
 window.onload = function() {
+	navbar_onload();
 	$('logout').onclick = function(e) {
 		if (confirm('Are you sure you want to logout?')) {
 			send('logout');

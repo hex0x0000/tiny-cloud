@@ -19,22 +19,21 @@
 //
 // Email: hex0x0000@protonmail.com
 
-function toggle() {
-	let hidden = $("navbar").getElementsByClassName("hidden");
-	let shown = $("navbar").getElementsByClassName("shown");
-	if (hidden.length > 0) {
-		let len = hidden.length;
-		for (let i = 0; i < len; i++) {
-			hidden[0].classList.replace("hidden", "shown");
-		}
-	} else if (shown.length > 0) {
-		let len = shown.length;
-		for (let i = 0; i < len; i++) {
-			shown[0].classList.replace("shown", "hidden");
-		}
-	}
-}
-function navbar_onload() {
-	$("logo").src = prefix + 'static/logo.png';
-	$("logobox").onclick = toggle;
-}
+pub mod error;
+pub mod plugin;
+
+pub use actix_multipart;
+pub use actix_web;
+pub use async_trait::async_trait;
+pub use serde_json;
+pub use tiny_args;
+pub use toml;
+
+/// Alias of [`serde_json::Value`] to avoid confusions with [`toml::Value`]
+pub type Json = serde_json::Value;
+
+/// Alias of [`toml::Value`] to avoid confusions with [`serde_json::Value`]
+pub type Toml = toml::Value;
+
+#[cfg(test)]
+mod tests {}

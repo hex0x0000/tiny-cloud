@@ -93,7 +93,7 @@ impl Default for PageData {
         Self {
             only_once: None,
             html: unescaped_webfile!("homepage.html").into(),
-            js: None,
+            js: Some(unescaped_webfile!("homepage.js").into()),
             css: None,
         }
     }

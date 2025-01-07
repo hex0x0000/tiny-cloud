@@ -122,6 +122,17 @@ pub async fn logout(user: Identity) -> impl Responder {
     HttpResponse::Ok()
 }
 
+/// Changes session id and causes all active sessions to logout.
+#[get("/logoutall")]
+pub async fn logoutall(user: Identity, pool: web::Data<Pool>) -> impl Responder {
+    let pool = pool.into_inner();
+    if let Err(err) = auth::change_sessionid(&pool, user).await {
+        err.to_response()
+    } else {
+        HttpResponse::Ok().body("")
+    }
+}
+
 // Deletes an user's own account
 #[get("/delete")]
 pub async fn delete(user: Identity, pool: web::Data<Pool>) -> impl Responder {

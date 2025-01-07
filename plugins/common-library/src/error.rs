@@ -19,22 +19,36 @@
 //
 // Email: hex0x0000@protonmail.com
 
-function toggle() {
-	let hidden = $("navbar").getElementsByClassName("hidden");
-	let shown = $("navbar").getElementsByClassName("shown");
-	if (hidden.length > 0) {
-		let len = hidden.length;
-		for (let i = 0; i < len; i++) {
-			hidden[0].classList.replace("hidden", "shown");
-		}
-	} else if (shown.length > 0) {
-		let len = shown.length;
-		for (let i = 0; i < len; i++) {
-			shown[0].classList.replace("shown", "hidden");
-		}
-	}
-}
-function navbar_onload() {
-	$("logo").src = prefix + 'static/logo.png';
-	$("logobox").onclick = toggle;
+use actix_web::{HttpResponse, HttpResponseBuilder};
+use serde_json::json;
+
+/// Common trait for errors that can be returned to the client.
+pub trait ErrToResponse {
+    /// Error's name
+    fn error(&self) -> &'static str;
+
+    /// Error's type
+    fn err_type(&self) -> &'static str;
+
+    /// Error's message
+    fn msg(&self) -> String;
+
+    /// Error's http code
+    fn http_code(&self) -> HttpResponseBuilder;
+
+    /// Handles special types before building the response
+    fn handle(&self);
+
+    /// Turns the error into a response
+    fn to_response(&self) -> HttpResponse {
+        self.handle();
+        self.http_code().content_type("application/json").body(
+            json!({
+                "error": self.error(),
+                "type": self.err_type(),
+                "msg": self.msg()
+            })
+            .to_string(),
+        )
+    }
 }

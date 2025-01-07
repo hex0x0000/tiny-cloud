@@ -38,7 +38,7 @@ pub struct Plugins {
 
 impl Plugins {
     pub fn new() -> Self {
-        let plugins = HashMap::from([plugin!("archive", tcloud_archive::ArchivePlugin)]);
+        let plugins = HashMap::from([plugin!("archive", archive::ArchivePlugin)]);
         PLUGIN_NAMES
             .set(plugins.values().map(|p| p.info()).collect())
             .expect("Tried to initialize PLUGIN_NAMES while already initialized. This is a bug");
