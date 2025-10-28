@@ -21,8 +21,8 @@
 
 use super::error::AuthError;
 use argon2::{
-    password_hash::{errors, rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, errors, rand_core::OsRng},
 };
 use tokio::task;
 use zeroize::Zeroizing;
@@ -40,7 +40,8 @@ fn verify_blocking(password: &[u8], hash: &str) -> Result<(), AuthError> {
 
 /// Verifies password's correctness.
 /// Runs Argon2 on a blocking task to avoid starving the async pool
-pub async fn verify(password: Zeroizing<Vec<u8>>, hash: String) -> Result<(), AuthError> {
+pub async fn verify(password: &[u8], hash: String) -> Result<(), AuthError> {
+    let password = Zeroizing::new(password.to_vec());
     task::spawn_blocking(move || verify_blocking(&password, &hash))
         .await
         .map_err(|e| AuthError::InternalError(format!("Hash verification task failed: {e}")))?
@@ -57,7 +58,8 @@ fn create_blocking(password: &[u8]) -> Result<String, AuthError> {
 
 /// Creates a new hash from the user's password.
 /// Runs Argon2 on a blocking task to avoid starving the async pool
-pub async fn create(password: Zeroizing<Vec<u8>>) -> Result<String, AuthError> {
+pub async fn create(password: &[u8]) -> Result<String, AuthError> {
+    let password = Zeroizing::new(password.to_vec());
     task::spawn_blocking(move || create_blocking(&password))
         .await
         .map_err(|e| AuthError::InternalError(format!("Hash creation task failed: {e}")))?

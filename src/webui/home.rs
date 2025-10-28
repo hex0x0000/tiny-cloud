@@ -22,14 +22,14 @@
 use std::sync::{LazyLock, OnceLock};
 
 use crate::{config, plugins, unescaped_webfile, utils, webfile};
-use maud::{html, Markup, PreEscaped, DOCTYPE};
+use common_library::serde_json;
+use maud::{DOCTYPE, Markup, PreEscaped, html};
 use serde::Deserialize;
-use tcloud_library::serde_json;
 use tokio::process::Command;
 
 static HOMEPAGE: OnceLock<PageData> = OnceLock::new();
 
-pub static NAVBAR_ADMIN: LazyLock<Markup> = LazyLock::new(|| {
+static NAVBAR_ADMIN: LazyLock<Markup> = LazyLock::new(|| {
     html!(
         div id="navbar" {
             div id="logobox" {
@@ -55,7 +55,7 @@ pub static NAVBAR_ADMIN: LazyLock<Markup> = LazyLock::new(|| {
     )
 });
 
-pub static NAVBAR_USER: LazyLock<Markup> = LazyLock::new(|| {
+static NAVBAR_USER: LazyLock<Markup> = LazyLock::new(|| {
     html!(
         div id="navbar" {
             div id="logobox" {
@@ -79,6 +79,18 @@ pub static NAVBAR_USER: LazyLock<Markup> = LazyLock::new(|| {
         }
     )
 });
+
+pub fn header(is_admin: bool) -> Markup {
+    html! (
+        header {
+            @if is_admin {
+                (*NAVBAR_ADMIN)
+            } @else {
+                (*NAVBAR_USER)
+            }
+        }
+    )
+}
 
 #[derive(Deserialize, Clone)]
 struct PageData {
@@ -156,11 +168,7 @@ pub async fn page(username: String, is_admin: bool) -> String {
                 }
             }
             body {
-                @if is_admin {
-                    (*NAVBAR_ADMIN)
-                } @else {
-                    (*NAVBAR_USER)
-                }
+                (header(is_admin))
                 (PreEscaped(page.html))
             }
         }

@@ -19,10 +19,10 @@
 //
 // Email: hex0x0000@protonmail.com
 
+use common_library::toml;
 use serde::{Deserialize, Serialize};
 use std::env::current_exe;
 use std::path::PathBuf;
-use tcloud_library::toml;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::OnceCell;

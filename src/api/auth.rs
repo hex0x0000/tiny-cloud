@@ -25,15 +25,16 @@ use crate::{
     utils::{get_ip, sanitize_user},
 };
 use actix_identity::Identity;
-use actix_web::{dev::ConnectionInfo, get, post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, dev::ConnectionInfo, get, post, web};
 use async_sqlite::Pool;
+use common_library::error::ErrToResponse;
 use serde::Deserialize;
-use tcloud_library::error::ErrToResponse;
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, ZeroizeOnDrop};
+use totp_rs::TOTP;
 
 /// Username and password sent by the client to login.
 #[non_exhaustive]
-#[derive(Deserialize)]
+#[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct Login {
     pub user: String,
     pub password: String,
@@ -41,12 +42,52 @@ pub struct Login {
 }
 
 /// Username, password and token sent by the client to register
-#[derive(Deserialize)]
+#[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct Register {
     user: String,
     password: String,
     token: String,
     totp_as_qr: bool,
+}
+
+/// Method to change user's password
+#[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
+#[serde(rename_all = "lowercase")]
+pub enum ChangeMethod {
+    /// A token must be given from the admin to user in order to change the user's password,
+    /// if the user doesn't remember it
+    Token(String),
+    /// The user can use the old password to change the new password
+    OldPassword(String),
+}
+
+/// Payload to change the user's password
+#[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
+pub struct ChangePwd {
+    new_password: String,
+    #[serde(flatten)]
+    change_method: ChangeMethod,
+}
+
+/// Payload to change user's TOTP secret
+#[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
+pub struct ChangeTotp {
+    password: String,
+    totp_as_qr: bool
+}
+
+fn return_totp_response(totp: TOTP, as_qr: bool) -> HttpResponse {
+    use common_library::serde_json::json;
+    let mut resp = HttpResponse::Ok();
+    resp.content_type("application/json");
+    if as_qr {
+        match totp.get_qr_base64() {
+            Ok(qr) => resp.body(json!({ "totp_qr": qr }).to_string()),
+            Err(e) => AuthError::InternalError(format!("Failed to get TOTP QR code image as base64: {e}")).to_response(),
+        }
+    } else {
+        resp.body(json!({ "totp_url": totp.get_url() }).to_string())
+    }
 }
 
 /// Registers new user and starts a new session.
@@ -58,28 +99,23 @@ pub async fn register(
     credentials: web::Json<Register>,
     pool: web::Data<Pool>,
 ) -> impl Responder {
-    use tcloud_library::serde_json::json;
-
     if config!(registration).is_some() {
         let credentials = credentials.into_inner();
-        let password = Zeroizing::new(credentials.password.into_bytes());
         let pool = pool.into_inner();
-        match auth::register_user(&pool, credentials.user.clone(), password, credentials.token).await {
+        match auth::register_user(
+            &pool,
+            credentials.user.clone(),
+            credentials.password.as_bytes(),
+            credentials.token.clone(),
+        )
+        .await
+        {
             Ok((totp, userid)) => {
                 log::warn!("client [{}] registered as `{}`", get_ip(&conn), sanitize_user(&credentials.user));
                 if let Err(err) = Identity::login(&req.extensions(), userid) {
                     return AuthError::InternalError(format!("Failed to build identity during registration: {err}")).to_response();
                 }
-                let mut resp = HttpResponse::Ok();
-                resp.content_type("application/json");
-                if credentials.totp_as_qr {
-                    match totp.get_qr_base64() {
-                        Ok(qr) => resp.body(json!({ "totp_qr": qr }).to_string()),
-                        Err(e) => AuthError::InternalError(format!("Failed to get TOTP QR code image as base64: {e}")).to_response(),
-                    }
-                } else {
-                    resp.body(json!({ "totp_url": totp.get_url() }).to_string())
-                }
+                return_totp_response(totp, credentials.totp_as_qr)
             }
             Err(err) => {
                 log::warn!(
@@ -142,4 +178,35 @@ pub async fn delete(user: Identity, pool: web::Data<Pool>) -> impl Responder {
     } else {
         HttpResponse::Ok().body("")
     }
+}
+
+/// Changes user passwords and invalidates old sessions
+#[post("/changepwd")]
+pub async fn changepwd(user: Identity, pool: web::Data<Pool>, payload: web::Json<ChangePwd>) -> impl Responder {
+    let pool = pool.into_inner();
+    let payload = payload.into_inner();
+    match &payload.change_method {
+        ChangeMethod::OldPassword(old_password) => {
+            if let Err(err) = auth::change_pwd(&pool, user, payload.new_password.as_bytes(), old_password.as_bytes()).await {
+                return err.to_response();
+            }
+        }
+        ChangeMethod::Token(token) => {
+            if let Err(err) = auth::change_pwd_token(&pool, user, payload.new_password.as_bytes(), token.to_owned()).await {
+                return err.to_response();
+            }
+        }
+    }
+    HttpResponse::Ok().body("")
+}
+
+#[post("/changetotp")]
+pub async fn changetotp(user: Identity, pool: web::Data<Pool>, payload: web::Json<ChangeTotp>) -> impl Responder {
+    let pool = pool.into_inner();
+    let payload = payload.into_inner();
+    let totp = match auth::change_totp(&pool, user, payload.password.as_bytes()).await {
+        Ok(totp) => totp,
+        Err(err) => return err.to_response()
+    };
+    return_totp_response(totp, payload.totp_as_qr)
 }

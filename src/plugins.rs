@@ -24,11 +24,11 @@ mod macros;
 use crate::*;
 use actix_web::HttpResponse;
 use api::plugins::FileForm;
+use common_library::plugin::{PluginInfo, User};
+use common_library::{Json, Toml, plugin::Plugin, toml::Table};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::{boxed::Box, sync::OnceLock};
-use tcloud_library::plugin::{PluginInfo, User};
-use tcloud_library::{plugin::Plugin, toml::Table, Json, Toml};
 
 static PLUGIN_NAMES: OnceLock<Vec<&'static PluginInfo>> = OnceLock::new();
 
@@ -38,7 +38,7 @@ pub struct Plugins {
 
 impl Plugins {
     pub fn new() -> Self {
-        let plugins = HashMap::from([plugin!("archive", archive::ArchivePlugin)]);
+        let plugins = HashMap::<String, Box<dyn Plugin>>::from([]);
         PLUGIN_NAMES
             .set(plugins.values().map(|p| p.info()).collect())
             .expect("Tried to initialize PLUGIN_NAMES while already initialized. This is a bug");

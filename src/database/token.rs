@@ -23,12 +23,12 @@ use super::{
     error::DBError,
     utils::{calc_expire, now},
 };
-use crate::config::Registration;
+use crate::{api::token::NewToken, config::Registration};
 use async_sqlite::{
-    rusqlite::{named_params, OptionalExtension},
     Pool,
+    rusqlite::{OptionalExtension, named_params},
 };
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{Rng, distr::Alphanumeric};
 use std::time::Duration;
 
 #[non_exhaustive]
@@ -36,28 +36,32 @@ pub struct Token {
     pub id: i64,
     pub token: String,
     pub expire_date: i64,
+    pub for_user: Option<String>,
 }
 
 pub const TOKEN_TABLE: &str = "CREATE TABLE IF NOT EXISTS tokens (
     id          INTEGER PRIMARY KEY,
     token       TEXT    NOT NULL,
     expire_date INT     NOT NULL,
+    for_user    TEXT,
     UNIQUE(token)
 )";
 
-const INSERT_TOKEN: &str = "INSERT INTO tokens (token, expire_date) VALUES (:token, :expire_date)";
+fn gen_token(registration: &Registration) -> String {
+    rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(registration.token_size.into())
+        .map(char::from)
+        .collect()
+}
 
 /// Creates a token and adds it to the database
 /// Optionally takes an `duration_secs` param which specifies the duration, if none
 /// is given then the config's token_duration_seconds is used
-pub async fn create_token(pool: &Pool, registration: &Registration, duration_secs: Option<u64>) -> Result<(String, u64), DBError> {
-    let token: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(registration.token_size.into())
-        .map(char::from)
-        .collect();
+pub async fn create_token(pool: &Pool, registration: &Registration, info: NewToken) -> Result<(String, u64), DBError> {
+    let token: String = gen_token(registration);
     let _token = token.clone();
-    let duration = if let Some(duration) = duration_secs {
+    let duration = if let Some(duration) = info.duration {
         duration
     } else {
         registration.token_duration_seconds
@@ -65,10 +69,11 @@ pub async fn create_token(pool: &Pool, registration: &Registration, duration_sec
     let expire_date: u64 = calc_expire(Duration::new(duration, 0))?;
     pool.conn(move |conn| {
         conn.execute(
-            INSERT_TOKEN,
+            "INSERT INTO tokens (token, expire_date, for_user) VALUES (:token, :expire_date, :for_user)",
             named_params! {
                 ":token": token,
                 ":expire_date": expire_date,
+                ":for_user": info.for_user,
             },
         )
     })
@@ -77,7 +82,7 @@ pub async fn create_token(pool: &Pool, registration: &Registration, duration_sec
     Ok((_token, duration))
 }
 
-/// Gets token's data (id and expire date) if it exists
+/// Gets token's data (id, expire date, username) if it exists
 pub async fn get_token(pool: &Pool, token: String) -> Result<Option<Token>, DBError> {
     pool.conn(|conn| {
         conn.query_row("SELECT * FROM tokens WHERE token=?1", [token], |row| {
@@ -85,6 +90,7 @@ pub async fn get_token(pool: &Pool, token: String) -> Result<Option<Token>, DBEr
                 id: row.get(0)?,
                 token: row.get(1)?,
                 expire_date: row.get(2)?,
+                for_user: row.get(3)?,
             })
         })
         .optional()
@@ -102,6 +108,7 @@ pub async fn get_all_tokens(pool: &Pool) -> Result<Vec<Token>, DBError> {
                 id: row.get(0)?,
                 token: row.get(1)?,
                 expire_date: row.get(2)?,
+                for_user: row.get(3)?,
             })
         })?;
         rows.collect()

@@ -23,7 +23,7 @@ use crate::config::Tls;
 #[cfg(feature = "openssl")]
 use openssl::ssl::{SslAcceptor, SslAcceptorBuilder, SslFiletype, SslMethod};
 #[cfg(feature = "rustls")]
-use rustls::{pki_types::CertificateDer, ServerConfig};
+use rustls::{ServerConfig, pki_types::CertificateDer};
 #[cfg(feature = "rustls")]
 use rustls_pemfile::{certs, private_key};
 #[cfg(feature = "rustls")]

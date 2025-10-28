@@ -21,8 +21,8 @@
 
 use super::error::DBError;
 use async_sqlite::{
-    rusqlite::{self, named_params, params, ErrorCode, OptionalExtension},
     Error, Pool,
+    rusqlite::{self, ErrorCode, OptionalExtension, named_params, params},
 };
 
 /// Authentication data of a user.
@@ -100,12 +100,26 @@ pub async fn get_auth(pool: &Pool, username: String) -> Result<Option<UserAuth>,
 }
 
 /// Unpacks the userid into the username and session id.
-fn unpack(userid: String) -> Result<(String, i64), DBError> {
+pub fn unpack(userid: String) -> Result<(String, i64), DBError> {
     let split: Vec<&str> = userid.split(':').collect();
     Ok((
         split.get(0).map(|&username| username.into()).ok_or(DBError::InvalidUserID)?,
         split.get(1).and_then(|id| id.parse::<i64>().ok()).ok_or(DBError::InvalidUserID)?,
     ))
+}
+
+/// Returns password hash from userid, if userid is not valid returns [`None`].
+pub async fn get_passhash(pool: &Pool, username: String, sessionid: i64) -> Result<Option<String>, DBError> {
+    pool.conn(move |conn| {
+        conn.query_row(
+            "SELECT pass_hash FROM users WHERE username=?1 AND sessionid=?2",
+            params![username, sessionid],
+            |row| row.get(0),
+        )
+        .optional()
+    })
+    .await
+    .map_err(|e| DBError::ExecError(format!("Failed to get passhash from userid: {e}")))
 }
 
 /// Returns username and user admin status from userid.
@@ -138,6 +152,21 @@ pub async fn change_sessionid(pool: &Pool, userid: String) -> Result<(), DBError
     .await
     .map_err(|e| DBError::ExecError(format!("Failed to change session id: {e}")))
     .and_then(|changes| if changes == 0 { Err(DBError::InvalidUserID) } else { Ok(()) })
+}
+
+/// Changes password's hash of the selected user
+pub async fn change_passhash(pool: &Pool, username: String, new_pwdhash: String) -> Result<(), DBError> {
+    pool.conn(|conn| conn.execute("UPDATE users SET pass_hash=?1 WHERE username=?2", [new_pwdhash, username]))
+        .await
+        .map_err(|e| DBError::ExecError(format!("Failed to change user's passhash: {e}")))
+        .and_then(|changes| if changes > 0 { Ok(()) } else { Err(DBError::UserNotFound) })
+}
+
+pub async fn change_totp(pool: &Pool, username: String, new_totp: String) -> Result<(), DBError> {
+    pool.conn(|conn| conn.execute("UPDATE users SET totp=?1 WHERE username=?2", [new_totp, username]))
+        .await
+        .map_err(|e| DBError::ExecError(format!("Failed to change user's TOTP: {e}")))
+        .and_then(|changes| if changes > 0 { Ok(()) } else { Err(DBError::UserNotFound) })
 }
 
 /// Gets a list of all the usernames in the database

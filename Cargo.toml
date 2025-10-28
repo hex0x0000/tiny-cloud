@@ -5,10 +5,10 @@ description = "Fast, lightweight, self-hosted, KISS (Keep It Simple, Stupid) per
 repository = "https://github.com/personal-tiny-cloud/tiny-cloud"
 license = "AGPL-3.0-or-later"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 
 [features]
-default = [ "openssl", "archive" ]
+default = [ "openssl" ]
 
 # Logging
 syslog = [ "tiny-logs/syslog" ]
@@ -21,32 +21,29 @@ rustls = [ "dep:rustls-pemfile", "dep:rustls", "actix-web/rustls-0_23" ]
 # Database
 sqlite-bundled = [ "async-sqlite/bundled" ]
 
-# Plugins
-archive = [ "dep:archive" ]
-
 [dependencies]
 tokio = { version = "1.29", features = [ "sync", "fs", "process" ] }
 actix-web = { version = "4", features = [ "secure-cookies" ] }
 actix-session = { version = "0.10", features = [ "cookie-session" ] }
 actix-identity = "0.8"
 actix-multipart = { version = "0.7", features = [ "tempfile" ] }
-maud = "0.26"
+maud = "0.27"
 serde = { version = "1.0", features = [ "derive" ] }
 num_cpus = "1"
 thiserror = "2"
 argon2 = "0.5"
-rand = "0.8"
+rand = "0.9"
 zeroize = { version = "1.6", features = [ "zeroize_derive" ] }
 rpassword = "7"
-async-sqlite = { version = "0.3", default-features = false }
+async-sqlite = { version = "0.5", default-features = false }
 mutually_exclusive_features = "0.1"
 
 # Common library
-tcloud-library = { path = "plugins/common-library" }
+common-library = { path = "libs/common-library" }
 
 # Logging
 log = { version = "0.4", features = [ "release_max_level_info" ] }
-tiny-logs = { git = "https://github.com/personal-tiny-cloud/tiny-logs", tag = "0.0.5" }
+tiny-logs = { path = "libs/tiny-logs" }
 
 # TLS
 openssl = { version = "0.10", optional = true }
@@ -57,10 +54,10 @@ rustls-pemfile = { version = "2", optional = true }
 totp-rs = { version = "5.5", features = [ "qr", "otpauth" ] }
 
 # Plugins
-archive = { path = "plugins/archive", optional = true }
+archive = { path = "libs/archive", optional = true }
 
 [build-dependencies]
-tcloud-assets-include = { git = "https://github.com/personal-tiny-cloud/tcloud-assets-include", tag = "0.0.2" }
+assets-include = { path = "libs/assets-include" }
 
 # Speeds up password checking time
 [profile.dev.package.argon2]
@@ -75,4 +72,3 @@ panic = "abort"
 [lints.rust]
 unsafe_code = "forbid"
 non_ascii_idents = "forbid"
-

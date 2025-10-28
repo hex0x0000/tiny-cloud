@@ -12,7 +12,7 @@
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
+// GNu Affero General Public License for more details.
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
@@ -30,9 +30,8 @@ mod macros;
 use crate::{auth::validate_user, config, utils};
 use actix_identity::Identity;
 use actix_web::{
-    get,
+    HttpRequest, HttpResponse, Responder, get,
     web::{self, Redirect},
-    HttpRequest, HttpResponse, Responder,
 };
 use async_sqlite::Pool;
 
@@ -56,7 +55,7 @@ pub async fn root(req: HttpRequest, pool: web::Data<Pool>, user: Option<Identity
 pub async fn register_page(req: HttpRequest, user: Option<Identity>) -> impl Responder {
     if config!(registration).is_some() {
         if user.is_none() {
-            HttpResponse::Ok().body(register::page())
+            HttpResponse::Ok().body(*register::PAGE)
         } else {
             Redirect::to(utils::make_url("/ui"))
                 .see_other()
@@ -71,7 +70,7 @@ pub async fn register_page(req: HttpRequest, user: Option<Identity>) -> impl Res
 #[get("/login")]
 pub async fn login_page(req: HttpRequest, user: Option<Identity>) -> impl Responder {
     if user.is_none() {
-        HttpResponse::Ok().body(login::page())
+        HttpResponse::Ok().body(*login::PAGE)
     } else {
         Redirect::to(utils::make_url("/ui"))
             .see_other()

@@ -25,7 +25,7 @@ pub mod token;
 pub mod utils;
 use crate::{config, plugins};
 use async_sqlite::{JournalMode, Pool, PoolBuilder};
-use auth::{get_all_usernames, USERS_TABLE};
+use auth::{USERS_TABLE, get_all_usernames};
 use error::DBError;
 use std::path::PathBuf;
 use token::TOKEN_TABLE;

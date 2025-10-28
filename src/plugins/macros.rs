@@ -24,11 +24,8 @@
 /// The plugin must implement a `new() -> Self` function.
 #[macro_export]
 macro_rules! plugin {
-    ($feature:literal, $plugin:ty) => {
-        #[cfg(feature = $feature)]
-        {
-            let plugin = <$plugin>::new();
-            (plugin.info().name.into(), Box::new(plugin) as Box<dyn Plugin>)
-        }
-    };
+    ($plugin:ty) => {{
+        let plugin = <$plugin>::new();
+        (plugin.info().name.into(), Box::new(plugin) as Box<dyn Plugin>)
+    }};
 }

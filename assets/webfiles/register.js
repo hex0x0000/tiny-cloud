@@ -67,7 +67,6 @@ async function submit() {
 	} else {
 		let resp = await response.json();
 		setMsg('');
-		console.log(resp);
 		$('register').style.display = "none";
 		$('totp').hidden = false;
 		if (form.totp_as_qr) {
@@ -88,7 +87,7 @@ window.onload = function() {
 			setMsg('Registering...');
 			submit();
 		} catch (error) {
-			setErrorMsg('A JS error occurred, check logs for more info and open an issue if this persists');
+			setErrorMsg('An error occurred, check logs for more info and open an issue if this persists');
 			console.log(error);
 		}
 		return false;

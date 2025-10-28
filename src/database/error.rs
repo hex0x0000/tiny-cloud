@@ -25,12 +25,14 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum DBError {
-    #[error("IO Error: `{0}`")]
+    #[error("IO Error: {0}")]
     IOError(String),
-    #[error("Execution of SQLite command failed: `{0}`")]
+    #[error("Execution of SQLite command failed: {0}")]
     ExecError(String),
     #[error("User already exists")]
     UserExists,
+    #[error("User was not found")]
+    UserNotFound,
     #[error("Invalid username and/or id")]
     InvalidUserID,
     #[error("Time failure: {0}")]
@@ -41,7 +43,7 @@ impl Into<AuthError> for DBError {
     fn into(self) -> AuthError {
         match self {
             Self::UserExists => AuthError::InvalidRegCredentials,
-            Self::InvalidUserID => AuthError::InvalidSession,
+            Self::InvalidUserID | Self::UserNotFound => AuthError::InvalidSession,
             _ => AuthError::InternalError(self.to_string()),
         }
     }

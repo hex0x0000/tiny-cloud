@@ -19,7 +19,7 @@
 //
 // Email: hex0x0000@protonmail.com
 
-use tcloud_assets_include::include;
+use assets_include::include;
 
 fn main() {
     include("assets", vec!["ico", "256.png"], vec!["global.js"]);

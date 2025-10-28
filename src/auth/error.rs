@@ -20,7 +20,7 @@
 // Email: hex0x0000@protonmail.com
 
 use actix_web::{HttpResponse, HttpResponseBuilder};
-use tcloud_library::error::ErrToResponse;
+use common_library::error::ErrToResponse;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

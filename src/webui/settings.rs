@@ -19,11 +19,8 @@
 //
 // Email: hex0x0000@protonmail.com
 
-use crate::{
-    config, utils, webfile,
-    webui::home::{NAVBAR_ADMIN, NAVBAR_USER},
-};
-use maud::{html, PreEscaped, DOCTYPE};
+use crate::{config, utils, webfile, webui::home::header};
+use maud::{DOCTYPE, PreEscaped, html};
 
 pub fn page(username: String, is_admin: bool) -> String {
     html! {
@@ -44,34 +41,40 @@ pub fn page(username: String, is_admin: bool) -> String {
                 style { (webfile!("global.css")) (webfile!("navbar.css")) (webfile!("settings.css")) }
             }
             body {
-                @if is_admin {
-                    (*NAVBAR_ADMIN)
-                } @else {
-                    (*NAVBAR_USER)
-                }
+                (header(is_admin))
                 div id="settings" {
                     p id="msg" {
                         "Hi " (username) "! This is your settings page." br;
-                        "If you need to change password but you don't remember it you can ask the admin to create a token for changing your password"
                     }
                     button type="button" class="setting" id="logout" { "Log Out" }
-                    button type="button" class="setting" id="totp" { "Recreate TOTP" }
+                    button type="button" class="setting" { "Recreate TOTP" }
                     form id="totp" name="totp" {
+                        h3 { "Here you can change your TOTP secret" }
                         br; label for="tpasswd" { "Insert password:" }
-                        br; input type="text" id="tpasswd" name="tpasswd";
-                        br; input value="Change TOTP" type="submit" id="tbtn";
+                        br; input type="password" id="tpasswd" name="tpasswd" required;
+                        br; input type="checkbox" id="totp_as_qr" name="totp_as_qr" checked;
+                        label for="totp_as_qr" { "Receive TOTP secret as a QR Code?" }
+                        br; input value="Change TOTP" type="submit";
+                    }
+                    div id="totp-res" hidden {
+                        br; img id="totp-qr" src="";
+                        br; p id="totp-url" { "" }
+                        br; button id="totp-btn" { "I saved the TOTP secret" }
                     }
                     button type="button" class="setting" id="passwd" { "Change Password" }
-                    form id="passwd" name="passwd" {
-                        br; label for="oldpasswd" { "Insert old password or token:" }
-                        br; input type="text" id="oldpasswd" name="oldpasswd";
-                        br; label for="newpasswd" { "Insert new password:" }
-                        br; input type="text" id="newpasswd" name="newpasswd";
+                    form id="changepwd" name="changepwd" {
+                        h3 { "If you need to change password but you don't remember it you can ask the admin to create a token for changing your password. Check 'This is a token' if you are using a token" }
+                        br; label for="oldpassword" { "Insert old password or token:" }
+                        br; input type="password" id="oldpassword" name="oldpassword" required;
+                        input type="checkbox" id="istoken" name="istoken";
+                        label for="istoken" { "This is a token" }
+                        br; label for="new_password" { "Insert new password:" }
+                        br; input type="password" id="new_password" name="new_password" required;
                         br; label for="newpasswd_rep" { "Confirm new password:" }
-                        br; input type="text" id="newpasswd_rep" name="newpasswd_rep";
-                        br; input value="Change password" type="submit" id="tbtn";
+                        br; input type="password" id="newpasswd_rep" name="newpasswd_rep" required;
+                        br; input value="Change password" type="submit";
                     }
-                    button type="button" class="setting" id="session" { "Invalidate Session" }
+                    button type="button" class="setting" id="session" { "Log out all Sessions" }
                     button type="button" class="setting" id="delete" { "Delete Account" }
                 }
             }

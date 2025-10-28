@@ -22,20 +22,22 @@
 use crate::{api, config, error::RequestError, plugins::Plugins, utils, webui};
 use actix_identity::IdentityMiddleware;
 use actix_multipart::form::MultipartFormConfig;
-use actix_session::{config::PersistentSession, storage::CookieSessionStore, SessionMiddleware};
+use actix_session::{SessionMiddleware, config::PersistentSession, storage::CookieSessionStore};
 use actix_web::{
-    cookie::{time::Duration, Key, SameSite},
+    App, HttpServer,
+    cookie::{Key, SameSite, time::Duration},
     error, middleware,
     web::{self, Data},
-    App, HttpServer,
 };
 use async_sqlite::Pool;
-use tcloud_library::error::ErrToResponse;
+use common_library::error::ErrToResponse;
 
 fn warn_msg(binding: &str) {
     log::info!("Binding to {binding}");
     log::warn!("TLS is disabled.");
-    log::warn!("This is safe *ONLY* if you are running this server behind a reverse proxy (with TLS) or if you are running the server locally.");
+    log::warn!(
+        "This is safe *ONLY* if you are running this server behind a reverse proxy (with TLS) or if you are running the server locally."
+    );
     log::warn!("Any other configuration is *UNSAFE* and may be subject to cyberattacks.");
 }
 
@@ -119,7 +121,9 @@ pub async fn start(secret_key: Key, database: Pool, plugins: Plugins) -> Result<
                                     .service(api::auth::register)
                                     .service(api::auth::logout)
                                     .service(api::auth::logoutall)
-                                    .service(api::auth::delete),
+                                    .service(api::auth::delete)
+                                    .service(api::auth::changepwd)
+                                    .service(api::auth::changetotp),
                             )
                             .service(
                                 web::scope("/token")

@@ -22,24 +22,39 @@
 pub mod error;
 use crate::database;
 use async_sqlite::Pool;
+use common_library::serde_json::{Value, json};
 use database::{token, utils};
 use error::TokenError;
-use tcloud_library::serde_json::{json, Value};
 
+/// Checks token to create a new account.
 pub async fn check_token(pool: &Pool, token: String) -> Result<(), TokenError> {
     let db_token = token::get_token(pool, token.clone())
         .await
         .map_err(|e| TokenError::InternalError(e.to_string()))?
         .ok_or(TokenError::NotFound)?;
-    if db_token.token == token {
-        // Will panic in 292 billion years, be ready for that year!
-        let now = utils::now().map_err(|e| e.into())? as i64;
-        if db_token.expire_date < now {
-            token::remove_expired_tokens(pool).await.map_err(|e| e.into())?;
-            return Err(TokenError::Expired);
-        }
-    } else {
-        return Err(TokenError::NotFound);
+    // Will panic in 292 billion years, be ready for that year!
+    let now = utils::now().map_err(|e| e.into())? as i64;
+    if db_token.expire_date < now {
+        token::remove_expired_tokens(pool).await.map_err(|e| e.into())?;
+        return Err(TokenError::Expired);
+    }
+    token::delete_token(pool, token).await.map_err(|e| e.into())?;
+    Ok(())
+}
+
+/// Checks token to change password.
+pub async fn check_pwd_token(pool: &Pool, token: String, user: String) -> Result<(), TokenError> {
+    let db_token = token::get_token(pool, token.clone())
+        .await
+        .map_err(|e| TokenError::InternalError(e.to_string()))?
+        .ok_or(TokenError::NotFound)?;
+    let now = utils::now().map_err(|e| e.into())? as i64;
+    if db_token.expire_date < now {
+        token::remove_expired_tokens(pool).await.map_err(|e| e.into())?;
+        return Err(TokenError::Expired);
+    }
+    if db_token.for_user.map(|u| u != user).unwrap_or(true) {
+        return Err(TokenError::InvalidPwdToken);
     }
     token::delete_token(pool, token).await.map_err(|e| e.into())?;
     Ok(())

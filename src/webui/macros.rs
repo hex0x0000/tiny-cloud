@@ -23,7 +23,7 @@
 #[macro_export]
 macro_rules! image {
     ($filename:expr) => {
-        include_bytes!(concat!(env!("OUT_DIR"), "/assets/images/", $filename))
+        include_bytes!(concat!(env!("OUT_DIR"), "/", $filename))
     };
 }
 
@@ -31,7 +31,7 @@ macro_rules! image {
 #[macro_export]
 macro_rules! unescaped_webfile {
     ($filename:expr) => {
-        include_str!(concat!(env!("OUT_DIR"), "/assets/webfiles/", $filename))
+        include_str!(concat!(env!("OUT_DIR"), "/outdir/assets/webfiles/", $filename))
     };
 }
 
@@ -39,6 +39,6 @@ macro_rules! unescaped_webfile {
 #[macro_export]
 macro_rules! webfile {
     ($filename:expr) => {
-        PreEscaped(include_str!(concat!(env!("OUT_DIR"), "/assets/webfiles/", $filename)))
+        PreEscaped(include_str!(concat!(env!("OUT_DIR"), "/outdir/assets/webfiles/", $filename)))
     };
 }

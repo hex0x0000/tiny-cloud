@@ -19,10 +19,12 @@
 //
 // Email: hex0x0000@protonmail.com
 
-use crate::{config, utils, webfile};
-use maud::{html, PreEscaped, DOCTYPE};
+use std::sync::LazyLock;
 
-pub fn page() -> String {
+use crate::{config, utils, webfile};
+use maud::{DOCTYPE, PreEscaped, html};
+
+pub static PAGE: LazyLock<&'static str> = LazyLock::new(|| {
     html! {
         (DOCTYPE)
         html lang="en-US" {
@@ -37,20 +39,23 @@ pub fn page() -> String {
                 style { (webfile!("global.css")) (webfile!("register.css")) }
             }
             body {
-                p; div id="title" { (config!(server_name)) }
-                p; div id="version" { (env!("CARGO_PKG_VERSION")) }
-                p; div id="description" { (config!(description)) }
+                header {
+                    p; div id="title" { (config!(server_name)) }
+                    p; div id="version" { (env!("CARGO_PKG_VERSION")) }
+                    p; div id="description" { (config!(description)) }
+                }
+
                 form id="register" name="register" {
                     br; label for="user" { "Username:" }
-                    br; input type="text" id="user" name="user";
+                    br; input type="text" id="user" name="user" minlength=(config!(cred_size.min_username)) maxlength=(config!(cred_size.max_username)) required;
                     br; label for="password" { "Password:" }
-                    br; input type="password" id="password" name="password";
+                    br; input type="password" id="password" name="password" minlength=(config!(cred_size.min_passwd)) maxlength=(config!(cred_size.max_passwd)) required;
                     br; label for="password_rep" { "Repeat Password:" }
-                    br; input type="password" id="password_rep" name="password_rep";
+                    br; input type="password" id="password_rep" name="password_rep" minlength=(config!(cred_size.min_passwd)) maxlength=(config!(cred_size.max_passwd)) required;
                     br; label for="token" { "Registration Token:" }
-                    br; input type="text" id="token" name="token";
+                    br; input type="text" id="token" name="token" required;
                     br; label for="totp_as_qr" { "Show TOTP as a QR Code?" }
-                    input type="checkbox" id="totp_as_qr" name="totp_as_qr";
+                    input type="checkbox" id="totp_as_qr" name="totp_as_qr" checked;
                     br; input value="Register" type="submit" id="btn";
                 }
                 div id="totp" hidden {
@@ -68,5 +73,6 @@ pub fn page() -> String {
             }
         }
     }
-    .into()
-}
+    .into_string()
+    .leak()
+});

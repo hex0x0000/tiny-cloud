@@ -20,7 +20,7 @@
 // Email: hex0x0000@protonmail.com
 
 use actix_web::{HttpResponse, HttpResponseBuilder};
-use tcloud_library::error::ErrToResponse;
+use common_library::error::ErrToResponse;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -31,6 +31,8 @@ pub enum TokenError {
     NotFound,
     #[error("Token expired")]
     Expired,
+    #[error("Invalid password token")]
+    InvalidPwdToken,
 }
 
 impl ErrToResponse for TokenError {
@@ -43,6 +45,7 @@ impl ErrToResponse for TokenError {
             Self::InternalError(_) => stringify!(InternalError),
             Self::NotFound => stringify!(NotFound),
             Self::Expired => stringify!(Expired),
+            Self::InvalidPwdToken => stringify!(InvalidPwdToken),
         }
     }
 
@@ -55,6 +58,7 @@ impl ErrToResponse for TokenError {
             Self::InternalError(_) => HttpResponse::InternalServerError(),
             Self::NotFound => HttpResponse::NotFound(),
             Self::Expired => HttpResponse::Gone(),
+            Self::InvalidPwdToken => HttpResponse::Forbidden(),
         }
     }
 

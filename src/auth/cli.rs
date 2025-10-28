@@ -61,7 +61,7 @@ pub async fn create_user(pool: &Pool) -> Result<(), String> {
     let is_admin = input.trim().to_string().to_lowercase() == "y";
 
     // Add user to DB
-    let totp = add_user(&pool, user.clone(), password, is_admin).await.map_err(|e| match e {
+    let totp = add_user(&pool, user.clone(), &password, is_admin).await.map_err(|e| match e {
         AuthError::InvalidRegCredentials => format!("{e}"),
         AuthError::InternalError(ref err) => format!("{e}: {err}"),
         _ => e.to_string(),

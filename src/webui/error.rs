@@ -21,8 +21,8 @@
 
 use crate::{config, utils, webfile};
 use actix_web::HttpResponse;
-use maud::{html, PreEscaped, DOCTYPE};
-use tcloud_library::error::ErrToResponse;
+use common_library::error::ErrToResponse;
+use maud::{DOCTYPE, PreEscaped, html};
 
 fn to_page<E: ErrToResponse>(err: E, code: u16) -> String {
     html! {

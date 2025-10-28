@@ -27,14 +27,13 @@ mod totp;
 use crate::api::auth::Login;
 use crate::config;
 use crate::database::auth;
-use crate::token::check_token;
-use actix_identity::error::GetIdentityError;
+use crate::token;
 use actix_identity::Identity;
+use actix_identity::error::GetIdentityError;
 use async_sqlite::Pool;
+use common_library::error::ErrToResponse;
 use error::AuthError;
-use tcloud_library::error::ErrToResponse;
 use totp_rs::TOTP;
-use zeroize::Zeroizing;
 
 fn check_validity(username: &str, password: &[u8]) -> Result<(), AuthError> {
     let user_len = username.len();
@@ -64,19 +63,18 @@ fn check_validity(username: &str, password: &[u8]) -> Result<(), AuthError> {
 /// Checks a user's password and validates the TOTP token.
 /// Returns user's username on success.
 pub async fn check(pool: &Pool, login: Login) -> Result<String, AuthError> {
-    let password = Zeroizing::new(login.password.into_bytes());
-    check_validity(&login.user, &password)?;
-    let dummy_hash = hash::create(password.clone()).await?;
+    check_validity(&login.user, login.password.as_bytes())?;
+    let dummy_hash = hash::create(login.password.as_bytes()).await?;
     match auth::get_auth(pool, login.user.clone()).await.map_err(|e| e.into())? {
         Some(user) => {
-            hash::verify(password, user.pass_hash).await?;
-            self::totp::check(user.totp, login.totp)?;
+            hash::verify(login.password.as_bytes(), user.pass_hash).await?;
+            self::totp::check(user.totp, &login.totp)?;
             Ok(user.userid)
         }
         None => {
             // Dummy verification to keep the same response timings when the user is not found.
             // Keeps malicious attackers from scanning the server for usernames
-            let _ = hash::verify(password, dummy_hash).await;
+            let _ = hash::verify(login.password.as_bytes(), dummy_hash).await;
             Err(AuthError::InvalidCredentials)
         }
     }
@@ -84,10 +82,10 @@ pub async fn check(pool: &Pool, login: Login) -> Result<String, AuthError> {
 
 /// Adds a new user and returns its TOTP. Fails if username already exists.
 /// Used when adding user manually.
-pub async fn add_user(pool: &Pool, username: String, password: Zeroizing<Vec<u8>>, is_admin: bool) -> Result<TOTP, AuthError> {
-    check_validity(&username, &password)?;
+pub async fn add_user(pool: &Pool, username: String, password: &[u8], is_admin: bool) -> Result<TOTP, AuthError> {
+    check_validity(&username, password)?;
     let passwd_hash = hash::create(password).await?;
-    let totp = self::totp::gen(username.clone())?;
+    let totp = self::totp::generate(username.clone())?;
     auth::add_user(pool, username, passwd_hash, totp.get_url(), is_admin)
         .await
         .map_err(|e| e.into())?;
@@ -100,13 +98,15 @@ pub async fn add_user(pool: &Pool, username: String, password: Zeroizing<Vec<u8>
 pub async fn register_user(
     pool: &Pool,
     username: String,
-    password: Zeroizing<Vec<u8>>,
+    password: &[u8],
     token: String,
 ) -> Result<(TOTP, String), Box<dyn ErrToResponse>> {
-    check_validity(&username, &password).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
-    check_token(pool, token).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    check_validity(&username, password).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    token::check_token(pool, token)
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
     let passwd_hash = hash::create(password).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
-    let totp = self::totp::gen(username.clone()).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    let totp = self::totp::generate(username.clone()).map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
     let userid = auth::add_user(pool, username, passwd_hash, totp.get_url(), false)
         .await
         .map_err(|e| Box::new(Into::<AuthError>::into(e)) as Box<dyn ErrToResponse>)?;
@@ -146,10 +146,62 @@ pub async fn validate_user(pool: &Pool, user: Identity) -> Result<(String, bool)
 }
 
 /// Changes user's sessionid. Logs out on success.
-#[inline]
 pub async fn change_sessionid(pool: &Pool, user: Identity) -> Result<(), AuthError> {
     auth::change_sessionid(pool, user.id().map_err(|e| id_err_into(e))?)
         .await
         .map_err(|e| e.into())
         .inspect(|_| user.logout())
+}
+
+/// Changes user's password.
+/// After the password has been changed it changes sessionid to log out older sessions.
+/// If the session is not correct it logs out.
+pub async fn change_pwd(pool: &Pool, user: Identity, new_pwd: &[u8], old_pwd: &[u8]) -> Result<(), AuthError> {
+    let (username, sessionid) = auth::unpack(user.id().map_err(|e| id_err_into(e))?).map_err(|e| e.into())?;
+    match auth::get_passhash(pool, username.clone(), sessionid).await.map_err(|e| e.into())? {
+        Some(pass_hash) => {
+            hash::verify(old_pwd, pass_hash).await?;
+            let new_pwd = hash::create(new_pwd).await?;
+            auth::change_passhash(pool, username, new_pwd).await.map_err(|e| e.into())?;
+            change_sessionid(pool, user).await
+        }
+        None => {
+            user.logout();
+            Err(AuthError::InvalidSession)
+        }
+    }
+}
+
+/// Changes user's password using a token.
+pub async fn change_pwd_token(pool: &Pool, user: Identity, new_pwd: &[u8], token: String) -> Result<(), Box<dyn ErrToResponse>> {
+    let (username, _) = validate_user(pool, user).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+
+    token::check_pwd_token(pool, token, username.clone())
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+
+    let new_pwd = hash::create(new_pwd).await.map_err(|e| Box::new(e) as Box<dyn ErrToResponse>)?;
+    auth::change_passhash(pool, username, new_pwd)
+        .await
+        .map_err(|e| Box::new(Into::<AuthError>::into(e)) as Box<dyn ErrToResponse>)?;
+
+    Ok(())
+}
+
+/// Regenerates TOTP secret, logs out from all sessions and returns the new secret to be sent to the client.
+pub async fn change_totp(pool: &Pool, user: Identity, pwd: &[u8]) -> Result<TOTP, AuthError> {
+    let (username, sessionid) = auth::unpack(user.id().map_err(|e| id_err_into(e))?).map_err(|e| e.into())?;
+    match auth::get_passhash(pool, username.clone(), sessionid).await.map_err(|e| e.into())? {
+        Some(pass_hash) => {
+            hash::verify(pwd, pass_hash).await?;
+            let new_totp = totp::generate(username.clone())?;
+            auth::change_totp(pool, username, new_totp.get_url()).await.map_err(|e| e.into())?;
+            change_sessionid(pool, user).await?;
+            Ok(new_totp)
+        }
+        None => {
+            user.logout();
+            Err(AuthError::InvalidSession)
+        }
+    }
 }

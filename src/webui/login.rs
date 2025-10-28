@@ -19,10 +19,12 @@
 //
 // Email: hex0x0000@protonmail.com
 
-use crate::{config, utils, webfile};
-use maud::{html, PreEscaped, DOCTYPE};
+use std::sync::LazyLock;
 
-pub fn page() -> String {
+use crate::{config, utils, webfile};
+use maud::{DOCTYPE, PreEscaped, html};
+
+pub static PAGE: LazyLock<&'static str> = LazyLock::new(|| {
     html! {
         (DOCTYPE)
         html lang="en-US" {
@@ -37,22 +39,26 @@ pub fn page() -> String {
                 style { (webfile!("global.css")) (webfile!("login.css")) }
             }
             body {
-                p; div id="title" { (config!(server_name)) }
-                p; div id="version" { (env!("CARGO_PKG_VERSION")) }
-                p; div id="description" { (config!(description)) }
+                header {
+                    p; div id="title" { (config!(server_name)) }
+                    p; div id="version" { (env!("CARGO_PKG_VERSION")) }
+                    p; div id="description" { (config!(description)) }
+                }
+
                 form id="login" name="login" {
                     br; label for="user" { "Username:" }
-                    br; input type="text" id="user" name="user";
+                    br; input type="text" id="user" name="user" minlength=(config!(cred_size.min_username)) maxlength=(config!(cred_size.max_username)) required;
                     br; label for="password" { "Password:" }
-                    br; input type="password" id="password" name="password";
+                    br; input type="password" id="password" name="password" minlength=(config!(cred_size.min_passwd)) maxlength=(config!(cred_size.max_passwd)) required;
                     br; label for="totp" { "TOTP Token:" }
-                    br; input type="text" id="totp" name="totp";
+                    br; input type="text" id="totp" name="totp" minlength="6" maxlength="6" size="6" required;
                     br; input value="Login" type="submit" id="btn";
                 }
                 div id="msg" {}
                 @if config!(registration).is_some() {
                     p id="reglink" { a href=(utils::make_url("/ui/register")) { "Register Here" } }
                 }
+
                 footer {
                     br; "Tiny Cloud is licensed under the GNU Affero General Public License v3.0 or later"
                     br; a href=(env!("CARGO_PKG_REPOSITORY")) { "You can find the source code here." }
@@ -60,5 +66,6 @@ pub fn page() -> String {
             }
         }
     }
-    .into()
-}
+    .into_string()
+    .leak()
+});

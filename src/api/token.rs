@@ -24,16 +24,18 @@ use crate::config;
 use crate::database;
 use crate::token::{self, error::TokenError};
 use actix_identity::Identity;
-use actix_web::{get, post, web, HttpResponse, Responder};
+use actix_web::{HttpResponse, Responder, get, post, web};
 use async_sqlite::Pool;
+use common_library::error::ErrToResponse;
+use common_library::serde_json::{Value, json};
 use serde::Deserialize;
-use tcloud_library::error::ErrToResponse;
-use tcloud_library::serde_json::{json, Value};
 
-/// New token duration
+/// New token information
 #[derive(Deserialize)]
-struct NewToken {
-    duration: Option<u64>,
+#[non_exhaustive]
+pub struct NewToken {
+    pub duration: Option<u64>,
+    pub for_user: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -42,7 +44,6 @@ struct TokenInfo {
     token: Option<String>,
 }
 
-#[inline]
 async fn is_admin(pool: &Pool, user: Identity) -> Result<(), HttpResponse> {
     match validate_user(pool, user).await {
         Ok((_, is_admin)) if is_admin => Ok(()),
@@ -59,7 +60,7 @@ pub async fn new(user: Identity, pool: web::Data<Pool>, info: web::Json<NewToken
         if let Err(e) = is_admin(&pool, user).await {
             return e;
         }
-        match database::token::create_token(&pool, registration, info.into_inner().duration).await {
+        match database::token::create_token(&pool, registration, info.into_inner()).await {
             Ok((token, duration)) => HttpResponse::Ok()
                 .content_type("application/json")
                 .body(json!({"token": token, "duration": duration}).to_string()),
@@ -70,6 +71,7 @@ pub async fn new(user: Identity, pool: web::Data<Pool>, info: web::Json<NewToken
     }
 }
 
+/// Deletes a token
 #[post("/delete")]
 pub async fn delete(user: Identity, pool: web::Data<Pool>, token: web::Json<TokenInfo>) -> impl Responder {
     if config!(registration).is_some() {
