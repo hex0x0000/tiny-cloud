@@ -3,7 +3,7 @@
 use crate::{config, utils, webfile, webui::home::header};
 use maud::{DOCTYPE, PreEscaped, html};
 
-pub fn page(username: String, is_admin: bool) -> String {
+pub fn page(is_admin: bool) -> String {
     html! {
         (DOCTYPE)
         html lang="en-US" {
@@ -24,13 +24,10 @@ pub fn page(username: String, is_admin: bool) -> String {
             body {
                 (header(is_admin))
                 div id="settings" {
-                    p id="msg" {
-                        "Hi " (username) "! This is your settings page." br;
-                    }
                     button type="button" class="setting" id="logout" { "Log Out" }
                     button type="button" class="setting" { "Recreate TOTP" }
                     form id="totp" name="totp" {
-                        h3 { "Here you can change your TOTP secret" }
+                        h4 { "Here you can change your TOTP secret" }
                         br; label for="tpasswd" { "Insert password:" }
                         br; input type="password" id="tpasswd" name="tpasswd" required;
                         br; input type="checkbox" id="totp_as_qr" name="totp_as_qr" checked;
@@ -44,10 +41,10 @@ pub fn page(username: String, is_admin: bool) -> String {
                     }
                     button type="button" class="setting" id="passwd" { "Change Password" }
                     form id="changepwd" name="changepwd" {
-                        h3 { "If you need to change password but you don't remember it you can ask the admin to create a token for changing your password. Check 'This is a token' if you are using a token" }
+                        h4 { "If you need to change password but you don't remember it you can ask the admin to create a token for changing your password. Check 'This is a token' if you are using a token" }
                         br; label for="oldpassword" { "Insert old password or token:" }
                         br; input type="password" id="oldpassword" name="oldpassword" required;
-                        input type="checkbox" id="istoken" name="istoken";
+                        br; input type="checkbox" id="istoken" name="istoken";
                         label for="istoken" { "This is a token" }
                         br; label for="new_password" { "Insert new password:" }
                         br; input type="password" id="new_password" name="new_password" required;

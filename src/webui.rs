@@ -84,7 +84,7 @@ pub async fn settings_page(req: HttpRequest, pool: web::Data<Pool>, user: Option
     let pool = pool.into_inner();
     if let Some(user) = user {
         match validate_user(&pool, user).await {
-            Ok((username, is_admin)) => HttpResponse::Ok().body(settings::page(username, is_admin)),
+            Ok((_, is_admin)) => HttpResponse::Ok().body(settings::page(is_admin)),
             Err(e) => error::to_response_page(e),
         }
     } else {

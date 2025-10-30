@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-function setMsg(msg) {
-	$('msg').style.color = 'white';
-	$('msg').innerHTML = msg;
-}
-
-function setErrorMsg(msg) {
-	$('msg').style.color = 'red';
-	$('msg').innerHTML = msg;
-}
-
 async function get(type) {
 	let response = await fetch(prefix + `api/auth/${type}`, {
 		method: 'GET',
@@ -22,7 +12,7 @@ async function get(type) {
 	if (response.status !== 200) {
 		let errInfo = await response.json();
 		console.log(errInfo);
-		setErrorMsg(`Failed to ${type} :(<br>` + errInfo.msg);
+		alert(`Error: Failed to ${type} :(<br>` + errInfo.msg);
 	} else {
 		window.location.reload();
 	}
@@ -61,7 +51,7 @@ async function totp() {
     if (response.status !== 200) {
         let errInfo = await response.json();
         console.log(errInfo);
-        setErrorMessage("Failed to retrieve TOTP:<br>" + errInfo.msg);
+        alert("Error: Failed to retrieve TOTP:<br>" + errInfo.msg);
     } else {
         let resp = await response.json();
 
@@ -72,14 +62,14 @@ async function totp() {
 			totpurl.innerHTML += resp.totp_url;
 			$('totp-res').hidden = false;
 		}
-        setMsg('TOTP successfully changed. Save it before reloading.');
+        alert('TOTP successfully changed. Save it before reloading.');
 	}
 }
 
 async function changepwd() {
 	let form = Object.fromEntries(new FormData($('changepwd')));
 	if (form.new_password != form.newpasswd_rep) {
-		setErrorMsg('Passwords do not match.');
+		alert('Error: Passwords do not match.');
 		return;
 	}
 	delete form.newpasswd_rep;
@@ -105,7 +95,7 @@ async function changepwd() {
 	if (response.status !== 200) {
 		let errInfo = await response.json();
 		console.log(errInfo);
-		setErrorMsg(`Failed to ${type} :(<br>` + errInfo.msg);
+		alert(`Error: Failed to ${type} :(<br>` + errInfo.msg);
 	} else {
         alert('Password changed. Logging out...');
         window.location.reload();
@@ -139,22 +129,20 @@ window.onload = function() {
 	$('changepwd').onsubmit = function(e) {
 		e.preventDefault();
 		try {
-			setMsg('Changing password...');
 			changepwd();
 		} catch (error) {
-			setErrorMsg('An error occurred, check logs for more info and open an issue if this persists');
 			console.log(error);
+			alert('An error occurred, check logs for more info and open an issue if this persists');
 		}
 		return false;
 	};
     $('totp').onsubmit = function(e) {
         e.preventDefault();
         try {
-            setMsg('Changing TOTP...');
             totp();
         } catch (error) {
-			setErrorMsg('An error occurred, check logs for more info and open an issue if this persists');
             console.log(error);
+			alert('An error occurred, check logs for more info and open an issue if this persists');
         }
         return false;
     };
