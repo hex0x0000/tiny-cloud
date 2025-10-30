@@ -24,8 +24,8 @@ sqlite-bundled = [ "async-sqlite/bundled" ]
 [dependencies]
 tokio = { version = "1.29", features = [ "sync", "fs", "process" ] }
 actix-web = { version = "4", features = [ "secure-cookies" ] }
-actix-session = { version = "0.10", features = [ "cookie-session" ] }
-actix-identity = "0.8"
+actix-session = { version = "0.11", features = [ "cookie-session" ] }
+actix-identity = "0.9"
 actix-multipart = { version = "0.7", features = [ "tempfile" ] }
 maud = "0.27"
 serde = { version = "1.0", features = [ "derive" ] }
